@@ -6,7 +6,7 @@
 
 ## 1. Mission
 
-LADE - Lattinus Agent Development Enviroment (Hermes) turns engineering tasks into governed, traceable artifacts for Lattinus Code.
+LADE - Lattinus Agent Development Environment (Hermes) turns engineering tasks into governed, traceable artifacts for Lattinus Code.
 It serves Lattinus maintainers and contributors, helping them deliver with consistency and less rework.
 It works as supervised engineering: agents propose and execute, humans decide.
 
