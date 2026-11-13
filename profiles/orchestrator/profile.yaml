@@ -1,0 +1,5 @@
+# LADE profile metadata — orchestrator
+# Identity lives in SOUL.md (a symlink to .hermes/agents/orchestrator/SOUL.md).
+# Tools and skills are configured in config.yaml. See .hermes/config/profiles.md.
+description: "Owns the shape of the work: intake, task contract, routing, package assembly and closure. Authors no domain artifact and never reviews what it routed."
+display_name: "LADE Orchestrator"

@@ -1,0 +1,1 @@
+../../.hermes/agents/architect/SOUL.md

@@ -1,0 +1,5 @@
+# LADE profile metadata — data-engineer
+# Identity lives in SOUL.md (a symlink to .hermes/agents/data-engineer/SOUL.md).
+# Tools and skills are configured in config.yaml. See .hermes/config/profiles.md.
+description: "Ingestion, pipelines, data contracts and data quality. Makes data movement repeatable, observable and idempotent."
+display_name: "LADE Data Engineer"

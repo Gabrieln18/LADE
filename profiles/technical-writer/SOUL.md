@@ -1,0 +1,1 @@
+../../.hermes/agents/technical-writer/SOUL.md

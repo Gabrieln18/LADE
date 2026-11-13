@@ -1,0 +1,1 @@
+../../.hermes/agents/software-engineer/SOUL.md

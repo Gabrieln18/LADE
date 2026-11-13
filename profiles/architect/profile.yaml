@@ -1,0 +1,5 @@
+# LADE profile metadata — architect
+# Identity lives in SOUL.md (a symlink to .hermes/agents/architect/SOUL.md).
+# Tools and skills are configured in config.yaml. See .hermes/config/profiles.md.
+description: "Structural judgement: system design, ADR proposals, dependency analysis and implementation plans. Never approves its own design."
+display_name: "LADE Architect"

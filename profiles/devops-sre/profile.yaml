@@ -1,0 +1,5 @@
+# LADE profile metadata — devops-sre
+# Identity lives in SOUL.md (a symlink to .hermes/agents/devops-sre/SOUL.md).
+# Tools and skills are configured in config.yaml. See .hermes/config/profiles.md.
+description: "Containers, deployment definitions, observability and security configuration. Writes what runs and how it is watched; never applies it."
+display_name: "LADE DevOps/SRE"

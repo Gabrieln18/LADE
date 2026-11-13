@@ -1,0 +1,5 @@
+# LADE profile metadata — technical-writer
+# Identity lives in SOUL.md (a symlink to .hermes/agents/technical-writer/SOUL.md).
+# Tools and skills are configured in config.yaml. See .hermes/config/profiles.md.
+description: "Standalone and repo-level documentation for Lattinus Code: README, CONTRIBUTING, runbooks, developer guides and changelog. Exists so documentation has an author who is not the reviewer."
+display_name: "LADE Technical Writer"

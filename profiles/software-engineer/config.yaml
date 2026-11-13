@@ -1,0 +1,80 @@
+# LADE profile configuration — software-engineer
+#
+# Generated from .hermes/config/profiles.md §2. Do not add toolsets here
+# without changing that file and recording the change in .hermes/CHANGELOG.md.
+#
+# Hermes has no toolset allowlist, so least privilege is expressed as
+# `agent.disabled_toolsets`: everything not enabled below is denied.
+#
+# Model: per-profile choice is an open parameter (config/profiles.md §5).
+# The value below mirrors the maintainer's default so the profile runs.
+
+model:
+  default: openai/gpt-5.6-luna
+  provider: openrouter
+  base_url: https://openrouter.ai/api/v1
+
+agent:
+  disabled_toolsets:
+    - bot_room
+    - browser
+    - catalog
+    - coding
+    - computer_use
+    - connections
+    - context_engine
+    - cronjob
+    - debugging
+    - delegation
+    - desktop_ui
+    - discord
+    - discord_admin
+    - feishu_doc
+    - feishu_drive
+    - hermes-acp
+    - hermes-api-server
+    - hermes-bluebubbles
+    - hermes-cli
+    - hermes-cron
+    - hermes-dingtalk
+    - hermes-discord
+    - hermes-email
+    - hermes-feishu
+    - hermes-gateway
+    - hermes-matrix
+    - hermes-mattermost
+    - hermes-qqbot
+    - hermes-signal
+    - hermes-slack
+    - hermes-sms
+    - hermes-telegram
+    - hermes-webhook
+    - hermes-wecom
+    - hermes-wecom-callback
+    - hermes-weixin
+    - hermes-whatsapp
+    - image_gen
+    - kanban
+    - memory
+    - onboarding
+    - project
+    - safe
+    - search
+    - session_search
+    - tts
+    - video
+    - video_gen
+    - vision
+    - web
+    - x_search
+
+# Shell commands are approval-gated; file writes never are.
+approvals:
+  mode: smart
+
+skills:
+  # Skills are symlinked into this profile's skills/ by setup.sh,
+  # derived from .hermes/agents/software-engineer/AGENTS.md. The repo skill tree is
+  # not scanned again, so the role's surface stays exact.
+  project_discovery: false
+  disabled: []

@@ -1,0 +1,1 @@
+../../.hermes/agents/orchestrator/SOUL.md

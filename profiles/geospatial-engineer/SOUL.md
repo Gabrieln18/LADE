@@ -1,0 +1,1 @@
+../../.hermes/agents/geospatial-engineer/SOUL.md

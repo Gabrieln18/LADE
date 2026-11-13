@@ -1,0 +1,5 @@
+# LADE profile metadata — software-engineer
+# Identity lives in SOUL.md (a symlink to .hermes/agents/software-engineer/SOUL.md).
+# Tools and skills are configured in config.yaml. See .hermes/config/profiles.md.
+description: "Implementation in Python and Go: application code, APIs, tests and refactoring. Writes the smallest change that satisfies the contract, with the tests that prove it."
+display_name: "LADE Software Engineer"

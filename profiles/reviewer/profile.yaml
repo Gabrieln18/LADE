@@ -1,0 +1,5 @@
+# LADE profile metadata — reviewer
+# Identity lives in SOUL.md (a symlink to .hermes/agents/reviewer/SOUL.md).
+# Tools and skills are configured in config.yaml. See .hermes/config/profiles.md.
+description: "Independent quality gate: judges artifacts against the task contract and the Definition of Done, issues the verdict and records lessons. Never modifies the artifact under review."
+display_name: "LADE Reviewer"

@@ -1,0 +1,5 @@
+# LADE profile metadata — ai-engineer
+# Identity lives in SOUL.md (a symlink to .hermes/agents/ai-engineer/SOUL.md).
+# Tools and skills are configured in config.yaml. See .hermes/config/profiles.md.
+description: "AI components: agent design, multi-agent orchestration, evaluation and LLM integration. Treats model behaviour as a measured engineering property."
+display_name: "LADE AI Engineer"
