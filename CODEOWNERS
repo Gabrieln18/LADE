@@ -1,0 +1,33 @@
+# CODEOWNERS — LADE governance and merge gating.
+#
+# Every path listed here is human-write-only. Agents propose changes as text in
+# the artifact or as an entry in .hermes/memory/open-questions.md; they never
+# commit to these paths and never merge. See .hermes/AGENTS.md §11 and §8.1.
+#
+# The owner below is the maintainer account that owns the repository.
+
+# Default: the maintainer owns everything.
+*                               @Gabrieln18
+
+# Core governance — highest scrutiny.
+/.hermes/SOUL.md                @Gabrieln18
+/.hermes/AGENTS.md              @Gabrieln18
+/.hermes/config/                @Gabrieln18
+/.hermes/policies/              @Gabrieln18
+/.hermes/references/            @Gabrieln18
+/.hermes/templates/             @Gabrieln18
+/.hermes/workflows/             @Gabrieln18
+/.hermes/skills/                @Gabrieln18
+/.hermes/agents/                @Gabrieln18
+/.hermes/evals/golden-tasks/    @Gabrieln18
+
+# Runtime binding and provisioning.
+/.hermes/config/profiles.md     @Gabrieln18
+/setup.sh                       @Gabrieln18
+/CODEOWNERS                     @Gabrieln18
+
+# Role identities and profiles.
+/profiles/                      @Gabrieln18
+
+# Project memory — written by agents, merged by the maintainer.
+/.hermes/memory/                @Gabrieln18
