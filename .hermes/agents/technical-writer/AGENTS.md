@@ -1,6 +1,6 @@
 # AGENTS.md — technical-writer (manifest)
 
-> **Version:** 0.1.0 (new in v2.1) · `can_write` is a subset of `config/permissions.md` §5 (see `PATCHES.md`).
+> **Version:** 0.2.0 · `can_write` is a subset of `config/permissions.md` §5.
 
 ```yaml
 agent: technical-writer
