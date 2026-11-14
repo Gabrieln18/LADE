@@ -21,6 +21,8 @@ __pycache__/
 *.py[cod]
 .venv/
 .DS_Store
+# Makefile: local archives and compiled helpers
+.lade-backups/
 
 # Task instances and artifacts are produced at run time, never committed here.
 task.md
