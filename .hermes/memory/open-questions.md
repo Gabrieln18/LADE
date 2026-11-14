@@ -180,3 +180,13 @@
 - **Question:** How and when do golden tasks run, and who records the results in `evals/reports/`?
 - **Context:** `README.md` (Testing).
 - **Status:** OPEN
+
+### Q-017 · Profile homes symlinked outside the Hermes root break every role profile
+- **Date:** 2026-11-13
+- **Task:** none (development session)
+- **Raised by:** Hermes agent (development session)
+- **Owner:** Maintainers
+- **Blocking:** yes: `hermes -p <role>` is unusable for all nine roles
+- **Question:** Should `setup.sh` provision each role home as a real directory at `$HERMES_HOME/profiles/<role>` — content symlinked from this repository — instead of symlinking the directory itself, and can Hermes stop deriving the Hermes root from a canonicalized profile path?
+- **Context:** `setup.sh` section 2; defect, cause, evidence and fix in `docs/reports/LADE-20261113-profile-home-multiplexer.md`, patch at `docs/reports/attachments/setup-multihome.patch`. Regression guard: `make verify`.
+- **Status:** OPEN
