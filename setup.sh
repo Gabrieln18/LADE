@@ -178,33 +178,85 @@ else
   mkdir -p "$PROFILES_DIR"
 fi
 
+# The home must be a REAL directory whose entries are symlinks into this
+# repository -- never a symlink to the repository directory itself.
+#
+# `hermes -p <role>` sets HERMES_HOME=$PROFILES_DIR/<role>, and the runtime derives
+# the Hermes ROOT from that path by stripping `profiles/<name>`. Resolve the profile
+# dir through a symlink and the root becomes the repository, which is then taken for
+# a second Hermes root: the live host gateway is read as another tenant's, the CLI
+# never attaches, and `hermes -p <role>` hangs on a blank screen (the $HERMES_HOME
+# already serves such a home). A real directory keeps the canonical path inside
+# $HERMES_HOME while every content file still lives once, here in the repository.
+CONTENT_ENTRIES=(AGENTS.md SOUL.md config.yaml profile.yaml)
+
 for role in "${ROLES[@]}"; do
   link="$PROFILES_DIR/$role"
   target="$ROOT/profiles/$role"
   [ -d "$target" ] || { warn "profiles/$role missing; cannot link"; continue; }
+
   if [ -L "$link" ]; then
-    current="$(readlink "$link")"
-    [ "$current" = "$target" ] && ok "$role -> $target" || warn "$link points to '$current'"
-  elif [ -e "$link" ]; then
-    warn "$link exists and is not a symlink; remove it by hand"
-  elif [ "$CHECK" -eq 1 ]; then
-    warn "$role not linked"
-  else
-    ln -s "$target" "$link"
-    ok "linked $role"
+    if [ "$CHECK" -eq 1 ]; then
+      warn "$role home is a whole-directory symlink; it must be a real directory"
+      continue
+    fi
+    rm -f "$link"
+    mkdir -p "$link"
+    ok "replaced $role whole-directory symlink with a real home directory"
   fi
 
-  # Credentials are never committed. The profile reads the maintainer's shared
-  # .env through a symlink, so a role runs without copying secrets into git.
-  if [ -f "$HERMES_HOME/.env" ]; then
-    if [ -e "$target/.env" ] || [ -L "$target/.env" ]; then
-      ok "$role .env present"
+  if [ "$CHECK" -eq 1 ]; then
+    [ -d "$link" ] || { warn "$role home missing"; continue; }
+  else
+    mkdir -p "$link"
+  fi
+  chmod 700 "$link" 2>/dev/null || true
+
+  # Content files: one file, two paths.
+  for entry in "${CONTENT_ENTRIES[@]}"; do
+    src="$target/$entry"; dst="$link/$entry"
+    [ -e "$src" ] || continue
+    if [ -L "$dst" ]; then
+      [ "$(readlink "$dst")" = "$src" ] || warn "$role/$entry points to '$(readlink "$dst")'"
+    elif [ -e "$dst" ]; then
+      warn "$role/$entry exists in the home and is not a symlink"
     elif [ "$CHECK" -eq 1 ]; then
-      warn "$role .env missing (run ./setup.sh)"
+      warn "$role/$entry not linked"
     else
-      ln -s "$HERMES_HOME/.env" "$target/.env"
-      ok "$role .env -> $HERMES_HOME/.env"
+      ln -s "$src" "$dst"
+      ok "$role/$entry -> $src"
     fi
+  done
+
+  # The skill tree generated above, mirrored as one symlink.
+  if [ -d "$target/skills" ]; then
+    if [ -L "$link/skills" ]; then
+      [ "$(readlink "$link/skills")" = "$target/skills" ] || warn "$role/skills points to '$(readlink "$link/skills")'"
+    elif [ -e "$link/skills" ]; then
+      warn "$role/skills exists in the home and is not a symlink"
+    elif [ "$CHECK" -eq 1 ]; then
+      warn "$role/skills not linked"
+    else
+      ln -s "$target/skills" "$link/skills"
+      ok "$role/skills -> $target/skills"
+    fi
+  fi
+
+  # Credentials are never committed: the home points straight at the shared .env,
+  # and the repo-side path keeps maintenance sessions at the repository root working.
+  if [ -f "$HERMES_HOME/.env" ]; then
+    for dst in "$link/.env" "$target/.env"; do
+      if [ -L "$dst" ]; then
+        ok "${dst#$ROOT/} present"
+      elif [ -e "$dst" ]; then
+        warn "${dst#$ROOT/} exists and is not a symlink"
+      elif [ "$CHECK" -eq 1 ]; then
+        warn "${dst#$ROOT/} missing (run ./setup.sh)"
+      else
+        ln -s "$HERMES_HOME/.env" "$dst"
+        ok "${dst#$ROOT/} -> $HERMES_HOME/.env"
+      fi
+    done
   else
     note "$role: no $HERMES_HOME/.env to link; provide credentials per profile"
   fi
