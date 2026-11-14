@@ -1,9 +1,13 @@
 # Defect report — `hermes -p <role>` blocks on a blank screen
 
-> **Date:** 2026-11-13 · **Component:** profile provisioning (`setup.sh`, `profiles/<role>/`) + Hermes gateway attach
-> **Severity:** high — every LADE role profile is unusable; no work can start
-> **Status:** root-caused, reproduced, fix verified on one role, repo-side fix not yet merged
+> **Date:** 2026-11-13 · **Revised:** 2026-11-14 (runtime layout repaired; see §7)
+> **Component:** profile provisioning (`setup.sh`, `profiles/<role>/`) + Hermes gateway attach
+> **Severity:** high — every LADE role profile was unusable; no work could start
+> **Status:** fixed. Root cause confirmed; the `setup.sh` fix is committed (`b0f2f8d`);
+> the runtime layout was repaired on 2026-11-14 (`make repair-homes`). One
+> `hermes gateway restart` — a human action — remains before the profiles attach.
 > **Found by:** development session on Hermes Agent v0.23.1 (2026.9.24), Linux, user systemd unit `hermes-gateway.service`
+> **Re-verified on 2026-11-14 against:** Hermes Agent v0.23.1+842.gdcfbaf0 (2026.9.24), same machine
 
 ---
 
@@ -12,11 +16,11 @@
 `hermes -p <role>` prints nothing and never returns. The process is not waiting for
 stdin: it blocks inside the gateway attach path before the welcome banner is drawn.
 
-Cause: a LADE profile home **resolves outside the Hermes root**. `setup.sh` symlinks
-`~/.hermes/profiles/<role>` at `<repo>/profiles/<role>`, so the profile's canonical
-path lives in this repository. The runtime derives the Hermes root from that path,
-concludes the repository is a **second Hermes root ("tenant")**, and therefore reads
-the live host gateway — the very process that already serves these profiles — as
+Cause: a LADE profile home **resolves outside the Hermes root**. `setup.sh` used to
+symlink `~/.hermes/profiles/<role>` at `<repo>/profiles/<role>`, so the profile's
+canonical path lived in this repository. The runtime derives the Hermes root from that
+path, concludes the repository is a **second Hermes root ("tenant")**, and therefore
+reads the live host gateway — the very process that already serves these profiles — as
 *another tenant's*. The client refuses to attach and starts its own gateway on the
 bogus root, which can never become attachable. Startup blocks forever.
 
@@ -31,6 +35,15 @@ The same mechanism makes the repository grow a complete Hermes home of its own
 ```console
 $ hermes -p orchestrator
                       # blank screen, indefinitely; Ctrl+C restores the prompt
+```
+
+Reproduced as a bounded run on 2026-11-14, which is also the cheapest way to test it
+from a script or a session that must not hang:
+
+```console
+$ timeout 60 hermes -p orchestrator -z "responda apenas OK"
+$ echo $?
+124                   # nothing printed; killed by the timeout
 ```
 
 Interrupting the process produces this stack, which is the fingerprint to look for:
@@ -70,10 +83,14 @@ make verify-canonical
 
 ```
 get_default_hermes_root()   /home/<user>/<repo>        <-- WRONG ROOT
-multiplexer_root_for()      /home/<user>/<repo>        <-- CLIENT LOOKS ELSEWHERE
+multiplexer_root_for()      None                       <-- CLIENT LOOKS ELSEWHERE
 launched_by_other_tenant()  True                       <-- HOST READ AS ANOTHER TENANT
 verdict                     START (never attachable)
 ```
+
+On 2026-11-13 the same command printed `/home/<user>/<repo>` for
+`multiplexer_root_for()`. The value differs because the bogus root has no recorded
+gateway at all on this build: the third line is the load-bearing one, and it is stable.
 
 ---
 
@@ -119,23 +136,28 @@ repository root. Table stakes for the fix: `state.db`, `gateway.sock`, `gateway.
 
 **Why the multiplexer rescues only some profiles.** `gateway/run_profile_reconcile.py`
 holds each profile's session-authority binding for the process lifetime
-(`::_serve_profile_runtime`, line 417). A profile whose home changes under a running
-multiplexer is served only after the binding is rebuilt; otherwise it is parked with
-`gateway/run_runtime.py` line 51 — *"session authority database does not belong to the
-reserved profile"* — because a session DB carries the identity of the home that
-created it. In place, `rescan-profiles` re-added exactly the one profile whose home
-had been torn down and rebuilt; the other eight stayed parked, and `serve-profile`
-recorded them in `served_profiles` while the actual serve failed. **A gateway restart
-is required after the layout changes.** Until it happens the multiplexer keeps ticking
-the homes it reserved at boot, so `cron/`, `logs/`, `plugins/` and
-`plugin-update-checks/` reappear inside `profiles/<role>/` in the repository even after
-they are cleaned — visible as `runtime_state_in_repo` in `make verify`.
+(`::_serve_profile_runtime`, line 417, `async def`). A profile whose home changes under
+a running multiplexer is served only after the binding is rebuilt; otherwise it is
+parked with `gateway/run_runtime.py` line 51 — *"session authority database does not
+belong to the reserved profile"* — because a session DB carries the identity of the
+home that created it. In place, `rescan-profiles` re-added exactly the one profile
+whose home had been torn down and rebuilt; the other eight stayed parked, and
+`serve-profile` recorded them in `served_profiles` while the actual serve failed.
+**A gateway restart is required after the layout changes.** Until it happens the
+multiplexer keeps ticking the homes it reserved at boot, so `cron/`, `logs/`,
+`plugins/` and `plugin-update-checks/` reappear inside `profiles/<role>/` in the
+repository even after they are cleaned — visible as `runtime_state_in_repo` in
+`make verify`. This was observed again on 2026-11-14: after `make prune-runtime`
+removed every stray, the still-running gateway recreated `state.db` in all nine
+repository directories within seconds (§5.3).
 
 ---
 
 ## 5. Evidence
 
-Same machine, same gateway, side by side (`make verify-canonical`):
+### 5.1 The failure, side by side (2026-11-13)
+
+Same machine, same gateway (`make verify-canonical`):
 
 | | LADE role (broken) | `doctor-copilot-docs` (correct) |
 |---|---|---|
@@ -157,6 +179,46 @@ cannot reach that conclusion (`make roster`):
 
 Note the roster keys profiles by **home path**, which is why a roster entry and a
 client lookup can disagree.
+
+### 5.2 The same roster, before the restart (2026-11-14)
+
+```
+Host gateway pid 2296 (multiplex: None)
+served_profiles:
+  /home/<user>/.hermes
+  /home/<user>/<repo>/profiles/ai-engineer
+  ... (the nine repository paths)
+parked_profiles: none
+```
+
+The roster is keyed by the paths reserved at boot, so after the repair it still names
+the nine repository paths. `hermes gateway list` shows all nine profiles plus `default`
+on pid 2296 — a green list that says nothing about whether the client can attach.
+
+### 5.3 After the repair, before the gateway restart (2026-11-14)
+
+| Check | Result |
+|---|---|
+| `make verify-canonical` | `ATTACH` for all nine roles; root, multiplexer root and tenant verdict all correct |
+| `make repair-homes-check` | exit 2 via `make` (the script itself exits 1) — home layout clean; the only drift is `repository profiles/<role>/state.db exists` ×9, recreated by the running gateway |
+| `./setup.sh --check` | exit 0 — `Result: structure consistent.` |
+| `make links` | exit 0 — `every symlink resolves` |
+| `make lint` | exit 0 — `lint clean` (shellcheck not installed) |
+| `make verify` | exit 2 via `make` — 9 × `[ FAIL ] served: absent: this profile cannot attach` and 9 × `[ WARN ] runtime_state_in_repo state.db` |
+| `git status` | clean (the repository root stays clean: no `state.db`, no `gateway.sock`, no `config.yaml`) |
+
+The nine `served` failures and the nine warnings are the same single fact — the host
+gateway still holds its boot bindings — and both are cleared by the restart. They are
+the expected pre-restart state, not a new defect.
+
+Per-role canonical output after the repair:
+
+```
+get_default_hermes_root()   /home/<user>/.hermes
+multiplexer_root_for()      /home/<user>/.hermes
+launched_by_other_tenant()  False
+verdict                     ATTACH
+```
 
 ---
 
@@ -201,14 +263,24 @@ bash scripts/repair_profile_homes.sh --apply    # repair in place (idempotent)
 make repair-homes && make gateway-restart && make verify
 ```
 
-### 6.2 `setup.sh` must stop creating the whole-directory symlink
+Applied on 2026-11-14 in this order: `make backup` (archive at
+`.lade-backups/profiles-20261114T094941.tar.gz`), `make repair-homes` (the nine
+whole-directory symlinks were moved to `~/.hermes/.lade-home-backup/`), then
+`make prune-runtime` to clear the runtime state the old layout had left in the
+repository. The per-profile `memories/` and `sessions/` were empty at that point, so
+nothing of value was discarded; the archive is the fallback.
 
-Section 2 of `setup.sh` currently does `ln -s "$target" "$link"`. A ready patch is
-attached to this report at `docs/reports/attachments/setup-multihome.patch`
-(generated with `diff -u --label a/setup.sh --label b/setup.sh`; applies cleanly with
-`git apply` from the repository root — verified with `git apply --check`).
-It creates the real directory, links `AGENTS.md SOUL.md config.yaml profile.yaml
-skills/` and `.env`, and reports a whole-directory symlink as drift in `--check`.
+### 6.2 `setup.sh` — done
+
+Absorbed into `setup.sh` (section 2) in commit `b0f2f8d` *"feat: updated setup.sh"*.
+The script now creates the real directory, links `AGENTS.md SOUL.md config.yaml
+profile.yaml skills/` and `.env`, and reports a whole-directory symlink as drift in
+`--check`.
+
+The patch that was attached to this report is kept as development history at
+`docs/reports/attachments/archive/setup-multihome.patch`. **Do not apply it**: it no
+longer applies (`git apply --check` fails at `setup.sh:178`) because the change is
+already in the file. It is archived for the record only.
 
 ### 6.3 Upstream candidates (Hermes)
 
@@ -229,16 +301,18 @@ Any of these would have prevented the whole class:
 
 ## 7. Acceptance criteria
 
-1. `hermes -p <role>` paints the welcome banner and accepts a prompt, for all nine
-   roles, from a clean shell.
-2. `make verify` exits 0: every home is a real directory inside `$HERMES_HOME`, every
-   content symlink resolves, every profile is served (`state="ready"`), and no runtime
-   state sits in the repository.
-3. `make verify-canonical` reports `ATTACH` for all nine roles.
-4. `bash scripts/repair_profile_homes.sh --check` exits 0.
-5. `./setup.sh --check` (with the fix in 6.2) exits 0.
-6. `git status` in the repository stays clean after the six checks above — no
-   `state.db`, no `gateway.sock`, no `config.yaml` at the repository root.
+| # | Criterion | State on 2026-11-14 |
+|---|---|---|
+| 1 | `hermes -p <role>` paints the welcome banner and accepts a prompt, for all nine roles, from a clean shell | pending the gateway restart (§5.3) |
+| 2 | `make verify` exits 0: every home a real directory inside `$HERMES_HOME`, every content symlink resolves, every profile served, no runtime state in the repository | layout and symlinks pass; `served` ×9 and `runtime_state_in_repo` ×9 pending the restart |
+| 3 | `make verify-canonical` reports `ATTACH` for all nine roles | **met** — 9/9 `ATTACH` |
+| 4 | `bash scripts/repair_profile_homes.sh --check` exits 0 | pending the restart (only the gateway-recreated `state.db` remains) |
+| 5 | `./setup.sh --check` exits 0 | **met** — exit 0, `structure consistent` |
+| 6 | `git status` in the repository stays clean after the six checks | **met** — clean; nothing at the repository root |
+
+Criterion 1 is the one that defines "done": the other five are its preconditions.
+Until it is re-run after the restart, this report claims a repaired layout and a
+correct attach decision, not a working `hermes -p <role>`.
 
 ## 8. Regression harness
 
@@ -247,6 +321,9 @@ Any of these would have prevented the whole class:
 any change to `setup.sh`, to `profiles/<role>/`, or after adding a role.
 
 ## 9. Code references
+
+Re-anchored on 2026-11-14 against Hermes Agent v0.23.1+842.gdcfbaf0 — every line below
+was re-checked in the installed tree, and all of them still hold.
 
 | Symbol | Location |
 |---|---|
@@ -261,7 +338,14 @@ any change to `setup.sh`, to `profiles/<role>/`, or after adding a role.
 | `missing_owner_state` | `hermes_cli/gateway_runtime_discovery.py:233` |
 | `launched_by_other_tenant` | `gateway/host_attach.py:118` |
 | `decide` | `gateway/host_attach.py:363` |
-| `_serve_profile_runtime` | `gateway/run_profile_reconcile.py:417` |
+| `_serve_profile_runtime` | `gateway/run_profile_reconcile.py:417` (`async def`) |
 | session-authority refusal | `gateway/run_runtime.py:51` |
-| `GatewayConnection.start` | `hermes_cli/gateway_connection.py:237` |
+| `GatewayConnection.start` | `hermes_cli/gateway_connection.py:212` (the blocking `self._ready.wait(...)` is line 237) |
 | `_is_gateway_runtime_lock_active_strict` | `gateway/status.py:1042` |
+
+## 10. Revision history
+
+| Date | Change |
+|---|---|
+| 2026-11-13 | Report written: root cause, reproduction, evidence, fix, acceptance criteria. `setup.sh` fix generated as a patch. |
+| 2026-11-14 | `setup.sh` fix confirmed committed (`b0f2f8d`); patch archived (§6.2). Runtime layout repaired with `make repair-homes` and `make prune-runtime` (§6.1). §2 bounded reproduction added; §5 re-measured, §7 turned into a results table, §9 re-anchored. Remaining: one gateway restart, then re-run §7. |

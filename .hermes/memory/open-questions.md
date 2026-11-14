@@ -188,5 +188,6 @@
 - **Owner:** Maintainers
 - **Blocking:** yes: `hermes -p <role>` is unusable for all nine roles
 - **Question:** Should `setup.sh` provision each role home as a real directory at `$HERMES_HOME/profiles/<role>` — content symlinked from this repository — instead of symlinking the directory itself, and can Hermes stop deriving the Hermes root from a canonicalized profile path?
-- **Context:** `setup.sh` section 2; defect, cause, evidence and fix in `docs/reports/LADE-20261113-profile-home-multiplexer.md`, patch at `docs/reports/attachments/setup-multihome.patch`. Regression guard: `make verify`.
-- **Status:** OPEN
+- **Context:** `setup.sh` section 2; defect, cause, evidence and fix in `docs/reports/LADE-20261113-profile-home-multiplexer.md`; the original patch is archived at `docs/reports/attachments/archive/setup-multihome.patch` (already absorbed into `setup.sh`, commit `b0f2f8d` — do not apply). Regression guard: `make verify`.
+- **Status:** RESOLVED
+- **Resolution:** 2026-11-14 — human decision (Maintainers): repair the runtime layout and bump the structure to v2.2.1. `setup.sh` section 2 creates the real home directory with symlinked content; `scripts/repair_profile_homes.sh` / `make repair-homes` repaired all nine homes in place; runtime state was pruned out of the repository. `make verify-canonical` now reports `ATTACH` for the nine roles and `./setup.sh --check` exits 0. The upstream half of the question (Hermes deriving its root from a canonicalized profile path) is not answered by Hermes and stays open as §6.3 of the report.
