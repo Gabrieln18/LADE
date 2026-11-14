@@ -2,6 +2,29 @@
 
 All notable changes to LADE (`.hermes/`) are recorded here. Format: Keep a Changelog; versioning: Semantic Versioning of the structure (README badge).
 
+## [2.2.1] - 2026-11-14
+
+Runtime fix: a profile home no longer lives in the repository, so `hermes -p <role>`
+attaches instead of blocking on a blank screen. First entry covering the development
+tooling added after v2.2.0 (`d468a93`, `4651361`, `b0f2f8d`).
+
+### Fixed
+- Profile homes are **real directories** at `$HERMES_HOME/profiles/<role>` (mode 0700) whose content entries (`AGENTS.md`, `SOUL.md`, `config.yaml`, `profile.yaml`, `skills/`, `.env`) are symlinks into this repository, instead of whole-directory symlinks at `<repo>/profiles/<role>`. A home that canonicalizes outside `$HERMES_HOME` made the runtime read the repository as a second Hermes root, classify the live host gateway as another tenant's and start a gateway that could never become attachable: `hermes -p <role>` printed nothing and never returned, for all nine roles.
+- `setup.sh` section 2 creates that shape and reports a whole-directory symlink as drift in `--check`.
+- Runtime state (`state.db`, `cron/`, `logs/`, `memories/`, `sessions/`) is created by Hermes inside the home; it no longer lands in the repository working tree.
+
+### Added
+- `scripts/repair_profile_homes.sh` (`--check` / `--apply`): repairs the home layout in place, idempotent.
+- `scripts/lade_dev.py`: the harness behind `make verify`, `verify-canonical`, `roster`, `rescan` and `serve`.
+- `Makefile`: provisioning (`setup`, `check`, `repair-homes`), verification (`verify`, `verify-canonical`, `roster`, `links`, `lint`, `doctor`), run/inspect (`run`, `smoke`, `status`, `tools`, `skills`, `logs`, `session`), gateway (`gateway-status`, `gateway-restart`, `rescan`, `serve`) and reset targets (`prune-runtime`, `reset-homes`, `reset-profiles`, `backup`, `restore`).
+- `docs/reports/LADE-20261113-profile-home-multiplexer.md`: defect report with root cause, evidence, fix and acceptance criteria.
+
+### Changed
+- `README.md`: structure badge and version footer to `v2.2.1`; the provisioning paragraph and the runtime-state note now describe the real-home-plus-symlinks shape instead of symlinked profile directories.
+
+### Affected files
+`setup.sh`; `scripts/repair_profile_homes.sh`; `scripts/lade_dev.py`; `Makefile`; `README.md`; `docs/reports/`; `.hermes/memory/project-state.md`; `.hermes/memory/open-questions.md` (Q-017).
+
 ## [2.2.0] - 2026-11-13
 
 Structure change: a content-only repository becomes content plus a thin, runnable profile layer. The runtime is the Hermes Agent; one role equals one profile. No adapter, generator or build step was added.

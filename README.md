@@ -12,7 +12,7 @@ A governed multi-agent engineering environment that turns engineering tasks into
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-orange" alt="Status" />
-  <img src="https://img.shields.io/badge/structure-v2.2.0-blue" alt="Structure" />
+  <img src="https://img.shields.io/badge/structure-v2.2.1-blue" alt="Structure" />
   <img src="https://img.shields.io/badge/lang-Markdown-informational" alt="Language" />
   <img src="https://img.shields.io/badge/runtime-Hermes%20Agent-6f42c1" alt="Runtime" />
   <img src="https://img.shields.io/badge/roles-9%20profiles-green" alt="Profiles" />
@@ -32,7 +32,7 @@ A governed multi-agent engineering environment that turns engineering tasks into
   <a href="#-documentation">Documentation</a>
 </p>
 
-> **Structure v2.2.0 (2026-11-13).** Content lives in `.hermes/`; each role is also a runnable Hermes profile in `profiles/`. Every file in this repository is written in English; delivered documents follow `output_language` in `task.md` (default PT-BR).
+> **Structure v2.2.1 (2026-11-14).** Content lives in `.hermes/`; each role is also a runnable Hermes profile in `profiles/`. Every file in this repository is written in English; delivered documents follow `output_language` in `task.md` (default PT-BR).
 
 ---
 
@@ -142,7 +142,7 @@ Each role declares its skills, references, policies, workflows and write scope i
 - **Governance:** `CODEOWNERS` plus branch protection; merge is human-only.
 - **Provisioning:** `setup.sh` (bash + python3, idempotent, `--check` for drift).
 
-No adapters, no generator, no build step. The profiles are symlinked into `~/.hermes/profiles/`, not packaged.
+No adapters, no generator, no build step. Each role's home is a real directory at `~/.hermes/profiles/<role>` whose content entries are symlinked from this repository; nothing is packaged. `scripts/repair_profile_homes.sh --check` is the test.
 
 ---
 
@@ -194,7 +194,7 @@ Then:
 
 To work inside Lattinus Code, that repository carries a three-line `.hermes.md` pointing here; start the role's profile from the Lattinus Code root so the domain context resolves.
 
-> Profile runtime state (`state.db`, `memories/`, `sessions/`) lands inside the symlinked directories and is ignored by git.
+> Profile runtime state (`state.db`, `memories/`, `sessions/`, `logs/`, `cron/`) is created by Hermes inside `~/.hermes/profiles/<role>`, never in this repository. After a change to the home layout the host gateway must be restarted before the profiles are served again (`make gateway-restart`, then `make verify`).
 
 ---
 
@@ -237,4 +237,4 @@ Runtime-side: each profile disables every toolset its role does not need (`confi
 | Source of context | [Notion Lattinus](https://app.notion.com/p/Lattinus-2f673eebda2f80d7973fc08ef9558a2e) |
 | Changelog | `.hermes/CHANGELOG.md` |
 
-**Version:** v2.2.0 (2026-11-13) · **Changelog:** `.hermes/CHANGELOG.md`
+**Version:** v2.2.1 (2026-11-14) · **Changelog:** `.hermes/CHANGELOG.md`
