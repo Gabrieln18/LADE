@@ -1,63 +1,63 @@
 # models.yaml
 #
-# Version: 0.1.0 (new in v2.3.0) | Date: 2026-11-14 | Location: config/models.yaml
+# Version: 0.2.0 (LADE v2.3.0) | Date: 2026-11-15 | Location: config/models.yaml
 # Normative single source of truth for which AI model each LADE role runs on.
 # Only humans edit this file (AGENTS.md §11). setup.sh renders the model:,
 # fallback_providers: and agent.reasoning_effort regions of every
 # profiles/<role>/config.yaml from this file; `setup.sh --check` reports drift
 # and writes nothing.
 #
-# Premise. A role should run on the model best suited to its task -- a coding
-# model for the implementation roles, a reasoning model for design and review,
-# a long-form text model for the writer -- instead of one generalist for every
-# role. A role binds to a CLASS; a class names a model and its options. This is
-# the "specialist per task, not generalist for all" choice.
+# Per-profile model. Each role names its OWN model, so you keep full control of
+# which specialist is scaled to each profile -- no role is forced into a shared
+# preset. `classes` below is an OPTIONAL convenience: a role may write
+# `class: <name>` instead of a model, and a role's own `model:` (when present)
+# always wins over its class.
 #
 # One key. All roles share the single OPENROUTER_API_KEY in $HERMES_HOME/.env;
 # only the model id changes per role.
-# Precedence: overrides.<role> > roles.<role> (inline) > classes.<class> > defaults.
+# Precedence: roles.<role> (inline keys) > classes.<class> > defaults.
 
-version: 0.1.0
+version: 0.2.0
 
-# Provider routing shared by every role unless a class or a role override says otherwise.
+# Provider routing shared by every role unless a role overrides it.
 defaults:
   provider: openrouter
   base_url: https://openrouter.ai/api/v1
 
-# Specialization classes. Point each one at the model that fits the class.
-# The ids below are the baseline that keeps the environment runnable on the
-# single OpenRouter key; replace them with the specialist of your choice.
-# To list candidates: hermes model --refresh
+# OPTIONAL preset library. Reference one from a role with `class: <name>` to
+# avoid repeating a model. Presets are pure convenience; nothing requires them.
+# To list candidates for a model id: hermes model --refresh
 classes:
-  coding:
-    # A model strong at implementation: code, APIs, tests, refactoring.
-    model: openai/gpt-5.6-luna
-  reasoning:
-    # A model strong at design, analysis and adversarial review.
-    model: openai/gpt-5.6-luna
-    reasoning_effort: high
-  text:
-    # A model strong at long-form prose (standalone and repo-level documentation).
-    model: openai/gpt-5.6-luna
-  generalist:
-    # A strong generalist with reliable tool use (intake, routing, operations).
-    model: openai/gpt-5.6-luna
+  coding: {model: deepseek/deepseek-v4-pro}
+  reasoning: {model: deepseek/deepseek-v4.1-flash, reasoning_effort: high}
+  text: {model: anthropic/claude-haiku-5.5}
+  generalist: {model: deepseek/deepseek-v4.1-flash}
 
-# Role to class binding. Change a role's class here, not its config.yaml.
-roles:
-  orchestrator: {class: generalist}
-  architect: {class: reasoning}
-  software-engineer: {class: coding}
-  data-engineer: {class: coding}
-  geospatial-engineer: {class: coding}
-  ai-engineer: {class: reasoning}
-  devops-sre: {class: generalist}
-  technical-writer: {class: text}
-  reviewer: {class: reasoning}
-
-# Per-role overrides. Highest precedence: an override wins over the role's class.
-# Leave empty to inherit everything from the class. Written by
+# Per-profile model -- the primary layer. Each role lists its own model.
+# Recognized keys per role: model, provider, base_url, reasoning_effort, fallback
+# and class (a preset name). `model` wins over `class`; omitted keys fall back to
+# the class, then to `defaults`. Written by
 #   ./setup.sh --model <role>=<model>
 #   make models-set ROLE=<role> MODEL=<model>
-# Recognized keys: model, provider, base_url, reasoning_effort, fallback.
-overrides: {}
+roles:
+  orchestrator:
+    model: deepseek/deepseek-v4.1-flash          # intake/routing: reliable tool use
+  architect:
+    model: deepseek/deepseek-v4.1-flash          # design + ADR
+    reasoning_effort: high
+  software-engineer:
+    model: deepseek/deepseek-v4-pro              # implementation: code, APIs, tests
+  data-engineer:
+    model: deepseek/deepseek-v4-pro              # pipelines, data contracts
+  geospatial-engineer:
+    model: deepseek/deepseek-v4-pro              # raster/vector, EO
+  ai-engineer:
+    model: deepseek/deepseek-v4.1-flash          # agents, evaluation, LLM integration
+    reasoning_effort: high
+  devops-sre:
+    model: deepseek/deepseek-v4.1-flash          # containers, deploy, observability
+  technical-writer:
+    model: anthropic/claude-haiku-5.5            # long-form prose, documentation
+  reviewer:
+    model: deepseek/deepseek-v4.1-flash          # adversarial review
+    reasoning_effort: high

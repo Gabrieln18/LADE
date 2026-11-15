@@ -13,21 +13,21 @@ This file defines the **runtime binding** of the role model: one role, one Herme
 3. Adding a role, or changing a role's tool surface, is a governance change: ADR plus human approval.
 4. The mechanism is `agent.disabled_toolsets` in the profile's `config.yaml` (Hermes has no allowlist). Everything not listed as enabled in §2 MUST be disabled there.
 5. A profile's skills are symlinks into the single pool `.hermes/skills/`, derived from the role manifest by `setup.sh`. Skills are never copied.
-6. The per-profile **model** is not set here: the single source is `.hermes/config/models.yaml`, which binds each role to a specialization class. `setup.sh` renders it into the profile's `config.yaml` and `setup.sh --check` reports drift. See `config/models.yaml` and ADR-0002.
+6. The per-profile **model** is not set here: the single source is `.hermes/config/models.yaml`, where **each role names its own model** (with an optional `class:` preset for convenience). `setup.sh` renders it into the profile's `config.yaml` and `setup.sh --check` reports drift. See `config/models.yaml` and ADR-0002.
 
 ## 2. Role to profile map
 
-| Role | Profile | Enabled toolsets | Terminal | Delegation | Model class |
-|------|---------|------------------|:--------:|:----------:|:-----------:|
-| `orchestrator` | `orchestrator` | `file`, `terminal`, `skills`, `todo`, `clarify`, `delegation` | yes | yes | `generalist` |
-| `architect` | `architect` | `file`, `terminal`, `skills`, `todo`, `clarify` | yes | no | `reasoning` |
-| `software-engineer` | `software-engineer` | `file`, `terminal`, `code_execution`, `skills`, `todo`, `clarify` | yes | no | `coding` |
-| `data-engineer` | `data-engineer` | `file`, `terminal`, `code_execution`, `skills`, `todo`, `clarify` | yes | no | `coding` |
-| `geospatial-engineer` | `geospatial-engineer` | `file`, `terminal`, `code_execution`, `skills`, `todo`, `clarify` | yes | no | `coding` |
-| `ai-engineer` | `ai-engineer` | `file`, `terminal`, `code_execution`, `skills`, `todo`, `clarify` | yes | no | `reasoning` |
-| `devops-sre` | `devops-sre` | `file`, `terminal`, `skills`, `todo`, `clarify` | yes | no | `generalist` |
-| `technical-writer` | `technical-writer` | `file`, `skills`, `todo`, `clarify` | no | no | `text` |
-| `reviewer` | `reviewer` | `file`, `terminal`, `skills`, `todo`, `clarify` | yes | no | `reasoning` |
+| Role | Profile | Enabled toolsets | Terminal | Delegation |
+|------|---------|------------------|:--------:|:----------:|
+| `orchestrator` | `orchestrator` | `file`, `terminal`, `skills`, `todo`, `clarify`, `delegation` | yes | yes |
+| `architect` | `architect` | `file`, `terminal`, `skills`, `todo`, `clarify` | yes | no |
+| `software-engineer` | `software-engineer` | `file`, `terminal`, `code_execution`, `skills`, `todo`, `clarify` | yes | no |
+| `data-engineer` | `data-engineer` | `file`, `terminal`, `code_execution`, `skills`, `todo`, `clarify` | yes | no |
+| `geospatial-engineer` | `geospatial-engineer` | `file`, `terminal`, `code_execution`, `skills`, `todo`, `clarify` | yes | no |
+| `ai-engineer` | `ai-engineer` | `file`, `terminal`, `code_execution`, `skills`, `todo`, `clarify` | yes | no |
+| `devops-sre` | `devops-sre` | `file`, `terminal`, `skills`, `todo`, `clarify` | yes | no |
+| `technical-writer` | `technical-writer` | `file`, `skills`, `todo`, `clarify` | no | no |
+| `reviewer` | `reviewer` | `file`, `terminal`, `skills`, `todo`, `clarify` | yes | no |
 
 Rules:
 1. Only the orchestrator holds `delegation`; every other role works inside its own profile.
@@ -67,4 +67,4 @@ The full strength table lives in the LADE environment skill (`references/enforce
 | Notion integration authorization and scope | Maintainers |
 | Disabling Hermes builtin skills per profile: they stay visible today, so the role's *declared* surface is narrower than its *visible* one | Maintainers |
 | Restarting the gateway multiplexer after adding a profile, so its secret scope is served | Maintainers / devops-sre |
-| Which concrete model each specialization class in `config/models.yaml` points to (baseline today; specialist ids to be chosen) | Maintainers |
+| Which concrete model each profile runs on in `config/models.yaml` (each role names its own; the `classes` presets are optional) | Maintainers |
