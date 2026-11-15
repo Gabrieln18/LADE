@@ -191,3 +191,13 @@
 - **Context:** `setup.sh` section 2; defect, cause, evidence and fix in `docs/reports/LADE-20261113-profile-home-multiplexer.md`; the original patch is archived at `docs/reports/attachments/archive/setup-multihome.patch` (already absorbed into `setup.sh`, commit `b0f2f8d` — do not apply). Regression guard: `make verify`.
 - **Status:** RESOLVED
 - **Resolution:** 2026-11-14 — human decision (Maintainers): repair the runtime layout and bump the structure to v2.2.1. `setup.sh` section 2 creates the real home directory with symlinked content; `scripts/repair_profile_homes.sh` / `make repair-homes` repaired all nine homes in place; runtime state was pruned out of the repository. `make verify-canonical` now reports `ATTACH` for the nine roles and `./setup.sh --check` exits 0. The upstream half of the question (Hermes deriving its root from a canonicalized profile path) is not answered by Hermes and stays open as §6.3 of the report.
+
+### Q-018 · Which concrete model per specialization class (and does a model change need a gateway restart)?
+- **Date:** 2026-11-14
+- **Task:** none (v2.3.0 feature)
+- **Raised by:** Hermes agent (development session)
+- **Owner:** Maintainers
+- **Blocking:** no
+- **Question:** Which model id should each class in `.hermes/config/models.yaml` point to (every class carries the baseline generalist today, so the "specialist" intent is not yet realized), and does changing a profile's model take effect on the next session only, or does it require a host-gateway restart?
+- **Context:** `config/models.yaml`; `config/profiles.md` §5; ADR-0002. Rendered and verified by `setup.sh --check` / `make models-check`.
+- **Status:** OPEN

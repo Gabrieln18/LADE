@@ -1,17 +1,18 @@
 # project-state.md
 
 > **Writer:** orchestrator, on task closure. **Mode:** overwrite. Reflects the present only; history belongs to git and PRs (`memory/README.md` §6.3).
-> **Last update:** 2026-11-14 · **Structure version:** v2.2.1
+> **Last update:** 2026-11-14 · **Structure version:** v2.3.0
 
 ## 1. Current state
 
-LADE is at structure v2.2.1: a Markdown core in `.hermes/` plus a thin profile layer in `profiles/`, both in one git repository. The runtime is the Hermes Agent; every role maps to one Hermes profile. There is no adapter, generator or build step, and no `dist/`.
+LADE is at structure v2.3.0: a Markdown core in `.hermes/` plus a thin profile layer in `profiles/`, both in one git repository. The runtime is the Hermes Agent; every role maps to one Hermes profile. There is no adapter, generator or build step, and no `dist/`.
 
 What works today:
 
 - Nine role identities, each self-sufficient as a profile `SOUL.md` (core contract plus role specialization).
 - Nine profile homes as real directories inside `$HERMES_HOME`, content symlinked from this repository (`scripts/repair_profile_homes.sh`, `make verify`), so `hermes -p <role>` attaches to the host gateway instead of blocking on a blank screen. v2.2.1 fixed this; the host gateway must be restarted after a layout change.
 - One skill pool in `.hermes/skills/`, bound to profiles by symlink, derived from each role manifest by `setup.sh`.
+- Per-profile AI model from a single catalog: `.hermes/config/models.yaml` binds each role to a specialization class (`coding`, `reasoning`, `text`, `generalist`); `setup.sh` renders it into each `config.yaml` and `setup.sh --check` reports model drift (`make models`, `make models-check`, `make models-set`). ADR-0002. The concrete model id per class is still the baseline one.
 - Memory as git-versioned Markdown in `.hermes/memory/`, with the per-profile `state.db` reserved for harness facts.
 - Governance by `CODEOWNERS` plus branch protection; merge is human-only.
 - Evals as a manual procedure with 23 golden tasks and fixtures.
@@ -43,3 +44,4 @@ None. The v2.2.1 runtime fix is applied on this machine: layout repaired, `make 
 1. Whether `memory/` gets a `decisions/` subfolder once approved ADRs exceed ~30 entries.
 2. Whether the reviewer profile gets a plugin hook enforcing read-only artifact access.
 3. Whether profiles are later packaged as per-profile distributions (`distribution.yaml`) or stay symlinked.
+4. Which concrete model each specialization class points to, and whether a model change needs a gateway restart or only a new session (`Q-018`).
