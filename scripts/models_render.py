@@ -9,7 +9,7 @@ Subcommands
     list     role -> class -> model, the effective mapping (read-only)
     check    report drift between models.yaml and the rendered config.yaml (read-only)
     render   write the managed regions into every config.yaml (idempotent)
-    set      record a per-role override in models.yaml, preserving comments
+    set      record a role's model in models.yaml, preserving comments
 
 Each ``config.yaml`` carries three marker-delimited regions -- ``lade:model``,
 ``lade:fallback`` and ``lade:reasoning`` -- and only what lies between a pair of
@@ -60,15 +60,13 @@ def _first(entries, key):
 
 
 def resolve(catalog: dict, role: str) -> dict:
-    """Effective model settings for *role*: override > role > class > defaults."""
+    """Effective model settings for *role*: role keys > class preset > defaults."""
     defaults = catalog.get("defaults") or {}
     classes = catalog.get("classes") or {}
     roles = catalog.get("roles") or {}
-    overrides = catalog.get("overrides") or {}
     role_entry = roles.get(role) or {}
     cls_entry = classes.get(role_entry.get("class")) or {}
-    override_entry = overrides.get(role) or {}
-    chain = (override_entry, role_entry, cls_entry)
+    chain = (role_entry, cls_entry)
 
     def pick(key):
         value = _first(chain, key)
@@ -210,8 +208,9 @@ def cmd_list(args) -> int:
     print()
     for role in roles:
         r = resolve(catalog, role)
+        label = r["class"] or "individual"
         extra = f"  effort={r['reasoning_effort']}" if r["reasoning_effort"] else ""
-        print(f"  {role:<{width}}  [{r['class']}]  {r['model']}{extra}")
+        print(f"  {role:<{width}}  [{label}]  {r['model']}{extra}")
     return 0
 
 
@@ -265,8 +264,8 @@ def cmd_set(args) -> int:
     yaml.preserve_quotes = True
     with path.open(encoding="utf-8") as handle:
         data = yaml.load(handle) or {}
-    overrides = data.setdefault("overrides", {})
-    entry = overrides.setdefault(args.role, {})
+    roles = data.setdefault("roles", {})
+    entry = roles.setdefault(args.role, {})
     entry["model"] = args.model
     if args.provider:
         entry["provider"] = args.provider
@@ -274,7 +273,7 @@ def cmd_set(args) -> int:
         entry["reasoning_effort"] = args.effort
     with path.open("w", encoding="utf-8") as handle:
         yaml.dump(data, handle)
-    print(f"  ok     overrides.{args.role}.model = {args.model}")
+    print(f"  ok     roles.{args.role}.model = {args.model}")
     return 0
 
 
