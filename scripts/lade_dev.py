@@ -198,6 +198,30 @@ def check_repo_runtime_pollution(role: str, report: Report) -> None:
         report.add(role, OK, "no_runtime_state", "repository holds the provisioned layout only")
 
 
+def check_model(role: str, report: Report) -> None:
+    """Report the model this role's profile will run on (informational).
+
+    The single source is .hermes/config/models.yaml; ``setup.sh --check`` is the
+    authority on drift. Here we only surface the value the runtime will read.
+    """
+    path = repo_root() / "profiles" / role / "config.yaml"
+    if not path.is_file():
+        return
+    model, in_model = "", False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped == "model:":
+            in_model = True
+            continue
+        if in_model:
+            if stripped.startswith("default:"):
+                model = stripped.split("default:", 1)[1].strip()
+                break
+            if line and not line[0].isspace():
+                in_model = False
+    report.add(role, OK, "model", model or "(unset)")
+
+
 def check_served(role: str, home: Path, report: Report, timeout: float) -> None:
     """Is the live host gateway serving this profile, per read-only discovery?"""
     from hermes_cli.gateway_runtime import discover_gateway_endpoint
@@ -245,6 +269,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
         if home is None:
             continue
         check_content_links(role, home, report)
+        check_model(role, report)
         check_repo_runtime_pollution(role, report)
         check_served(role, home, report, args.timeout)
     report.render()
