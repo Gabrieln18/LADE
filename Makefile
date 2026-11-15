@@ -31,6 +31,7 @@ PROFILES_DIR := $(HERMES_HOME)/profiles
 HERMES_AGENT := $(HERMES_HOME)/hermes-agent
 VENV_PY := $(shell if [ -x "$(HERMES_AGENT)/venv/bin/python3" ]; then printf '%s' "$(HERMES_AGENT)/venv/bin/python3"; else printf 'python3'; fi)
 DEV := scripts/lade_dev.py
+MODELS := scripts/models_render.py
 REPAIR := scripts/repair_profile_homes.sh
 # The provisioned repository layout that setup.sh owns; everything else under
 # profiles/<role>/ is runtime state Hermes should be writing in the HOME instead.
@@ -46,7 +47,7 @@ help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "; printf "\nLADE development targets\n"} \
 	     /^##@/ {printf "\n%s\n", substr($$0, 5)} \
 	     /^[a-zA-Z0-9_.-]+:.*## / {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
-	@printf '\nVariables: ROLE=<role>  CONFIRM=1 (destructive)  DRY=1 (preview)  HERMES_HOME=%s\n\n' "$(HERMES_HOME)"
+	@printf '\nVariables: ROLE=<role>  MODEL=<id> (run override)  CONFIRM=1 (destructive)  DRY=1 (preview)  HERMES_HOME=%s\n\n' "$(HERMES_HOME)"
 
 .PHONY: env print-venv-python
 env: ## Print the environment this Makefile will use
@@ -136,13 +137,28 @@ doctor: ## Hermes self-check (config, providers, dependencies)
 profiles: ## List every profile with model and gateway state
 	"$(HERMES)" profile list
 
+.PHONY: models models-check models-apply models-set
+models: ## Effective AI model per role (class -> model), from models.yaml
+	cd "$(ROOT)" && "$(VENV_PY)" "$(MODELS)" list --root "$(ROOT)"
+
+models-check: ## Report model drift between models.yaml and the config.yamls (writes nothing)
+	cd "$(ROOT)" && "$(VENV_PY)" "$(MODELS)" check --root "$(ROOT)"
+
+models-apply: ## Render models.yaml into every profile config.yaml
+	cd "$(ROOT)" && "$(VENV_PY)" "$(MODELS)" render --root "$(ROOT)"
+
+models-set: ## Set one role's model in models.yaml, then render: make models-set ROLE=x MODEL=<id>
+	@if [ -z "$(ROLE)" ] || [ -z "$(MODEL)" ]; then printf 'usage: make models-set ROLE=<role> MODEL=<model-id>\n'; exit 2; fi
+	cd "$(ROOT)" && "$(VENV_PY)" "$(MODELS)" set "$(ROLE)" "$(MODEL)" --root "$(ROOT)"
+	cd "$(ROOT)" && "$(VENV_PY)" "$(MODELS)" render --root "$(ROOT)"
+
 .PHONY: require-role
 require-role:
 	@if [ -z "$(ROLE)" ]; then printf 'usage: make <target> ROLE=<role>\navailable: %s\n' "$$(ls -1 "$(ROOT)/profiles" | tr '\n' ' ')"; exit 2; fi
 
 .PHONY: run
-run: require-role ## Start an interactive session as one role: make run ROLE=orchestrator
-	cd "$(ROOT)" && exec "$(HERMES)" -p "$(ROLE)"
+run: require-role ## Start a session as one role (optional MODEL override): make run ROLE=orchestrator [MODEL=...]
+	cd "$(ROOT)" && if [ -n "$(MODEL)" ]; then exec "$(HERMES)" -p "$(ROLE)" -m "$(MODEL)"; else exec "$(HERMES)" -p "$(ROLE)"; fi
 
 .PHONY: smoke
 smoke: require-role ## One-shot turn as one role (proves end to end: make smoke ROLE=architect)

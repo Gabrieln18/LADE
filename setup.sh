@@ -6,9 +6,16 @@
 # never writes credentials, never configures an MCP server.
 #
 # Usage:
-#   ./setup.sh            provision (safe to re-run)
-#   ./setup.sh --check    report drift and exit non-zero; writes nothing
-#   ./setup.sh --no-trust skip `hermes skills trust`
+#   ./setup.sh                 provision (safe to re-run)
+#   ./setup.sh --check         report drift and exit non-zero; writes nothing
+#   ./setup.sh --model R=M     set role R's model to M (recorded in
+#                              .hermes/config/models.yaml, then rendered)
+#   ./setup.sh --no-models     skip the model rendering step
+#   ./setup.sh --no-trust      skip `hermes skills trust`
+#
+# The per-profile model is rendered from .hermes/config/models.yaml
+# (see scripts/models_render.py). The env var LADE_MODEL_<ROLE> is accepted
+# as shorthand for --model <role>=<value>.
 #
 # Source of truth: .hermes/config/profiles.md §2 (roles, toolsets) and
 # .hermes/agents/<role>/AGENTS.md (declared skills). See README.md.
@@ -21,13 +28,20 @@ PROFILES_DIR="$HERMES_HOME/profiles"
 
 CHECK=0
 TRUST=1
-for arg in "$@"; do
-  case "$arg" in
-    --check)    CHECK=1 ;;
-    --no-trust) TRUST=0 ;;
-    -h|--help)  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "unknown option: $arg" >&2; exit 2 ;;
+DO_MODELS=1
+MODEL_OVERRIDES=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --check)     CHECK=1 ;;
+    --no-trust)  TRUST=0 ;;
+    --no-models) DO_MODELS=0 ;;
+    --model)     shift; [ $# -gt 0 ] || { echo "--model expects <role>=<model>" >&2; exit 2; }
+                 MODEL_OVERRIDES+=("$1") ;;
+    --model=*)   MODEL_OVERRIDES+=("${1#--model=}") ;;
+    -h|--help)   sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
+  shift
 done
 
 ROLES=(
@@ -41,6 +55,12 @@ ROLES=(
   technical-writer
   reviewer
 )
+
+# LADE_MODEL_<ROLE> is shorthand for --model <role>=<value>.
+for role in "${ROLES[@]}"; do
+  var="LADE_MODEL_$(printf '%s' "$role" | tr '[:lower:]-' '[:upper:]_')"
+  [ -n "${!var:-}" ] && MODEL_OVERRIDES+=("$role=${!var}")
+done
 
 fail=0
 note() { printf '  %s\n' "$*"; }
@@ -169,9 +189,41 @@ for role in "${ROLES[@]}"; do
   fi
 done
 
-# 2. Profile homes
+# 2. Per-profile model (single source: .hermes/config/models.yaml)
+#
+# setup.sh renders the model:, fallback_providers: and agent.reasoning_effort
+# regions of each profile's config.yaml from the catalog. Only what lies between
+# the `lade:*` markers is rewritten. Overrides passed here (--model / LADE_MODEL_*)
+# are recorded in models.yaml first, so the catalog stays the single source.
 echo
-echo "2. Profile homes in $PROFILES_DIR"
+echo "2. Per-profile model (.hermes/config/models.yaml)"
+RENDER="$ROOT/scripts/models_render.py"
+if [ "$DO_MODELS" -eq 0 ]; then
+  note "model rendering skipped (--no-models)"
+elif [ -f "$RENDER" ] && [ -f "$ROOT/.hermes/config/models.yaml" ]; then
+  if [ "$CHECK" -eq 1 ]; then
+    python3 "$RENDER" check --root "$ROOT" || fail=1
+  else
+    for ov in ${MODEL_OVERRIDES[@]+"${MODEL_OVERRIDES[@]}"}; do
+      role="${ov%%=*}"; model="${ov#*=}"
+      if [ "$role" = "$ov" ] || [ -z "$model" ]; then
+        warn "ignoring malformed --model '$ov' (expected <role>=<model>)"; continue
+      fi
+      if python3 "$RENDER" set "$role" "$model" --root "$ROOT" >/dev/null 2>&1; then
+        ok "model override $role=$model recorded in models.yaml"
+      else
+        warn "could not record model override for $role"
+      fi
+    done
+    python3 "$RENDER" render --root "$ROOT" || fail=1
+  fi
+else
+  note "scripts/models_render.py or models.yaml missing; skipping model step"
+fi
+
+# 3. Profile homes
+echo
+echo "3. Profile homes in $PROFILES_DIR"
 if [ "$CHECK" -eq 1 ]; then
   [ -d "$PROFILES_DIR" ] || warn "$PROFILES_DIR does not exist"
 else
@@ -262,7 +314,7 @@ for role in "${ROLES[@]}"; do
   fi
 done
 
-# 3. Skill scoping per profile
+# 4. Skill scoping per profile
 #
 # The real binding is each profile's own skills/ directory. The repository skill
 # tree is also trusted so a maintenance session started at the repo root sees the
@@ -270,7 +322,7 @@ done
 # project-state directory name and discovery there is not guaranteed. The profile
 # check below is the authoritative one.
 echo
-echo "3. Skill scoping per profile"
+echo "4. Skill scoping per profile"
 if [ "$TRUST" -eq 1 ] && command -v hermes >/dev/null 2>&1; then
   if hermes skills trust "$ROOT" >/dev/null 2>&1; then
     ok "repository skill tree trusted (best-effort)"
@@ -298,7 +350,7 @@ if command -v hermes >/dev/null 2>&1; then
   done
 fi
 
-# 4. Summary
+# 5. Summary
 echo
 if [ "$fail" -eq 0 ]; then
   echo "Result: structure consistent."
