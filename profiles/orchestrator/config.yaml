@@ -12,7 +12,7 @@
 
 # >>> lade:model (generated from .hermes/config/models.yaml by setup.sh -- do not edit) >>>
 model:
-  default: openai/gpt-5.6-luna
+  default: deepseek/deepseek-v4.1-flash
   provider: openrouter
   base_url: https://openrouter.ai/api/v1
 # <<< lade:model <<<
@@ -86,3 +86,8 @@ skills:
   # not scanned again, so the role's surface stays exact.
   project_discovery: false
   disabled: []
+telemetry:
+  shared_metrics:
+    enabled: false
+    send: false
+    offer_version: 2
