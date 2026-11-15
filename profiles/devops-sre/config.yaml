@@ -6,15 +6,23 @@
 # Hermes has no toolset allowlist, so least privilege is expressed as
 # `agent.disabled_toolsets`: everything not enabled below is denied.
 #
-# Model: per-profile choice is an open parameter (config/profiles.md §5).
-# The value below mirrors the maintainer's default so the profile runs.
+# Model: single source is .hermes/config/models.yaml. setup.sh renders the
+# `lade:model`, `lade:fallback` and `lade:reasoning` regions below; do not
+# edit them by hand. See .hermes/config/models.yaml and config/profiles.md §2.
 
+# >>> lade:model (generated from .hermes/config/models.yaml by setup.sh -- do not edit) >>>
 model:
   default: openai/gpt-5.6-luna
   provider: openrouter
   base_url: https://openrouter.ai/api/v1
+# <<< lade:model <<<
+# >>> lade:fallback (generated from .hermes/config/models.yaml by setup.sh -- do not edit) >>>
+fallback_providers: []
+# <<< lade:fallback <<<
 
 agent:
+  # >>> lade:reasoning (generated from .hermes/config/models.yaml by setup.sh -- do not edit) >>>
+  # <<< lade:reasoning <<<
   disabled_toolsets:
     - bot_room
     - browser
