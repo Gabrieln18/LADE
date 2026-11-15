@@ -7,17 +7,17 @@ All notable changes to LADE (`.hermes/`) are recorded here. Format: Keep a Chang
 Per-profile AI model from a single catalog: each role runs on a model suited to its task, not one generalist for all.
 
 ### Added
-- `.hermes/config/models.yaml`: the single source of truth for the model each role runs on — provider routing (`defaults`), specialization classes (`classes`: `coding`, `reasoning`, `text`, `generalist`), the role→class binding (`roles`) and optional per-role `overrides`.
-- `scripts/models_render.py`: renders the catalog into each `profiles/<role>/config.yaml` (the `model:`, `fallback_providers:` and `agent.reasoning_effort` regions), reports drift (`check`), and records per-role overrides comment-preserving (`set`).
-- `setup.sh`: new per-profile model step — renders the catalog; `--check` also reports model drift; `--model <role>=<model>` records an override; `LADE_MODEL_<ROLE>` is shorthand; `--no-models` skips the step.
+- `.hermes/config/models.yaml`: the single source of truth for the model each role runs on — provider routing (`defaults`), the **per-profile model** under `roles` (each role names its own model, so every profile is individually controlled), and an optional `classes` preset library. Precedence: `roles.<role>` > `classes.<class>` > `defaults`.
+- `scripts/models_render.py`: renders the catalog into each `profiles/<role>/config.yaml` (the `model:`, `fallback_providers:` and `agent.reasoning_effort` regions), reports drift (`check`), and records a role's model comment-preserving (`set` → `roles.<role>.model`).
+- `setup.sh`: new per-profile model step — renders the catalog; `--check` also reports model drift; `--model <role>=<model>` records the role's model; `LADE_MODEL_<ROLE>` is shorthand; `--no-models` skips the step.
 - `Makefile`: `models`, `models-check`, `models-apply`, `models-set`; `run` takes an optional `MODEL=<id>` override.
 - `scripts/lade_dev.py`: `make verify` reports each role's model.
 - ADR-0002 (decisions.md).
 
 ### Changed
 - `profiles/<role>/config.yaml` (all nine): the `model:` block is now a generated, marker-delimited region (`lade:model`), joined by `lade:fallback` and `lade:reasoning` regions; setup.sh rewrites only the bytes between markers.
-- `config/profiles.md`: §2 gains a "Model class" column; §5 drops "Per-profile model choice" (now implemented) and adds the open "which concrete model per class".
-- `README.md`: structure badge and footer to `v2.3.0`; Getting Started, Core Concepts, Repository Structure and Documentation mention the model catalog.
+- `config/profiles.md`: §1 rule 6 records that the per-profile model lives in `config/models.yaml` (each role names its own, presets optional); §5 tail updated accordingly. §2 stays the toolset map.
+- `README.md`: structure badge and footer to `v2.3.0`; Getting Started, Core Concepts, Repository Structure and Documentation cover the model catalog; new "Provisioning, reset and restart" section.
 
 ### Affected files
 `.hermes/config/models.yaml`; `.hermes/config/profiles.md`; `.hermes/memory/decisions.md`; `.hermes/memory/project-state.md`; `scripts/models_render.py`; `scripts/lade_dev.py`; `setup.sh`; `Makefile`; `profiles/*/config.yaml`; `README.md`; `.hermes.md`.

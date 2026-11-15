@@ -27,6 +27,7 @@ A governed multi-agent engineering environment that turns engineering tasks into
   <a href="#-core-concepts">Core Concepts</a> •
   <a href="#-repository-structure">Repository</a> •
   <a href="#-getting-started">Getting Started</a> •
+  <a href="#-provisioning-reset-and-restart">Provisioning &amp; Reset</a> •
   <a href="#-development">Development</a> •
   <a href="#-testing">Testing</a> •
   <a href="#-security">Security</a> •
@@ -122,7 +123,7 @@ Each role declares its skills, references, policies, workflows and write scope i
 - **Reviewer loop:** at most 2 `REWORK` cycles, then `ESCALATE` to a human.
 - **Memory:** `decisions.md` receives approved ADRs only; `lessons.md` is written by the reviewer; `open-questions.md` accepts any agent. Memory is git-versioned Markdown — the profiles' `state.db` holds harness facts only.
 - **Enforcement split:** the runtime imposes the toolset allowlist, the per-profile skill set and merge protection. Everything else — precedence, gates, separation of duties — is policy text the agent must honour. `.hermes/config/profiles.md` §3 states which is which.
-- **Model per role:** each role runs the AI model its specialization class names in `.hermes/config/models.yaml` (a coding model for implementation roles, reasoning for design/review, text for the writer). `setup.sh` renders the catalog into each profile's `config.yaml`; the model is not chosen per task.
+- **Model per role:** each role runs the AI model it names in `.hermes/config/models.yaml` — its own model, so every profile is individually controlled (`classes` are optional presets). `setup.sh` renders the catalog into each profile's `config.yaml`; the model is fixed per role, not chosen per task.
 
 ---
 
@@ -184,7 +185,7 @@ git clone https://github.com/Gabrieln18/LADE.git
 cd LADE
 ./setup.sh                 # link the 9 profiles, render their models, trust the skill tree
 ./setup.sh --check         # report drift (links + model) without writing
-make models                # the model each role will run on (role -> class -> model)
+make models                # the model each role will run on (per profile)
 hermes profile list        # nine LADE profiles + default
 hermes -p orchestrator     # start a session as the orchestrator
 ```
@@ -197,7 +198,7 @@ make models-set ROLE=software-engineer MODEL=<coding-model-id>   # persists in m
 make run ROLE=software-engineer MODEL=<model-id>                 # one-off run override, not persisted
 ```
 
-The model each role runs on comes from `.hermes/config/models.yaml` (one source); `setup.sh` renders it into the profile's `config.yaml`. See `.hermes/config/profiles.md` §2 and ADR-0002.
+The model each role runs on comes from `.hermes/config/models.yaml` (one source, one model per role); `setup.sh` renders it into the profile's `config.yaml`. See `.hermes/config/profiles.md` §1 and ADR-0002.
 
 Then:
 
@@ -208,6 +209,81 @@ Then:
 To work inside Lattinus Code, that repository carries a three-line `.hermes.md` pointing here; start the role's profile from the Lattinus Code root so the domain context resolves.
 
 > Profile runtime state (`state.db`, `memories/`, `sessions/`, `logs/`, `cron/`) is created by Hermes inside `~/.hermes/profiles/<role>`, never in this repository. After a change to the home layout the host gateway must be restarted before the profiles are served again (`make gateway-restart`, then `make verify`).
+
+---
+
+## ♻️ Provisioning, reset and restart
+
+Everything below runs from the repository root (the path contains a space — quote it). `make` must run there; `ROOT` is `$(CURDIR)`.
+
+### Initialize
+
+```bash
+git clone https://github.com/Gabrieln18/LADE.git
+cd LADE
+./setup.sh            # idempotent: link the 9 profile homes, render their models, trust the skill tree
+./setup.sh --check    # report drift (symlinks + model) and write nothing; exit 0 = consistent
+hermes profile list   # nine LADE profiles + default
+```
+
+`setup.sh` is the only supported provisioning path. It never installs packages, writes credentials or configures an MCP server. It derives each profile's skill symlinks from the role manifest and renders the model from the catalog — never edit a `lade:*` region in a `config.yaml` by hand.
+
+### Choose a model per profile
+
+The single source is `.hermes/config/models.yaml`; **each role names its own model** (`classes` are optional presets). Three ways:
+
+```bash
+# 1. edit the catalog (per role), then render
+$EDITOR .hermes/config/models.yaml && ./setup.sh     # or: make models-apply
+# 2. from the CLI: records roles.<role>.model in the catalog, then renders
+make models-set ROLE=software-engineer MODEL=<model-id>
+# 3. via setup.sh / env
+./setup.sh --model reviewer=<model-id>               # or: LADE_MODEL_REVIEWER=<model-id> ./setup.sh
+```
+
+Inspect and verify:
+
+```bash
+make models                                    # role -> model (per profile)
+make models-check                              # drift between models.yaml and the config.yamls
+hermes -p reviewer config get model.default    # what the runtime actually reads
+```
+
+A model change takes effect on the role's next session. A one-off run override (not persisted): `make run ROLE=architect MODEL=<model-id>`.
+
+### Reset
+
+Reset targets wipe **runtime state only** — never repository content (`models.yaml`, the `config.yaml`s, SOUL/AGENTS and skills survive).
+
+```bash
+make backup                          # archive current profiles state into .lade-backups/
+make reset-profiles CONFIRM=1 DRY=1  # preview first: prints what would be deleted
+make reset-homes CONFIRM=1           # delete the 9 homes in ~/.hermes/profiles, then re-provision
+make reset-profiles CONFIRM=1        # the above + prune leaked runtime state in the repo + re-provision
+```
+
+- Without `CONFIRM=1` a destructive target refuses; `DRY=1` prints the plan and removes nothing.
+- `restore CONFIRM=1` restores the newest archive from `.lade-backups/`.
+- There is **no delete-only target**: `reset-homes`/`reset-profiles` always re-provision at the end.
+
+### Restart and (un)register profiles
+
+The host gateway serves the profiles; after you add or remove a profile it must reconcile:
+
+```bash
+make rescan            # ask the running gateway to reconcile profiles/ (no restart)
+make gateway-restart   # full restart — run it from a shell OUTSIDE the gateway
+```
+
+> **Deleted a profile and it will not come back?** `hermes profile delete <role>` writes a tombstone at `~/.hermes/profiles/.deleted/<role>`, and Hermes hides any profile carrying one. Re-running `./setup.sh` recreates the home on disk but the tombstone stays, so the profile remains invisible and `./setup.sh --check` reports `expected N skill(s), visible 0` — which looks like drift but is neither a model nor a symlink problem. Fix: `rm -f "$HOME/.hermes/profiles/.deleted/"*` then `make rescan`; confirm with `hermes profile list`. To delete for real, pass the profile **id** (`hermes profile delete ai-engineer -y`, never the display name) and do **not** run `setup.sh` afterwards.
+
+### Verify
+
+```bash
+./setup.sh --check     # repository <-> runtime drift (symlinks + model); exit 0 = consistent
+make verify            # per-role health and "can this profile attach?"
+make verify-canonical  # the gateway facts behind attach vs. "another tenant"
+```
 
 ---
 
