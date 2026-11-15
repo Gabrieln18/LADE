@@ -12,10 +12,11 @@ A governed multi-agent engineering environment that turns engineering tasks into
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-orange" alt="Status" />
-  <img src="https://img.shields.io/badge/structure-v2.2.1-blue" alt="Structure" />
+  <img src="https://img.shields.io/badge/structure-v2.3.0-blue" alt="Structure" />
   <img src="https://img.shields.io/badge/lang-Markdown-informational" alt="Language" />
   <img src="https://img.shields.io/badge/runtime-Hermes%20Agent-6f42c1" alt="Runtime" />
   <img src="https://img.shields.io/badge/roles-9%20profiles-green" alt="Profiles" />
+  <img src="https://img.shields.io/badge/model-per--profile-6f42c1" alt="Model" />
   <img src="https://img.shields.io/badge/quality-reviewer%20gate-green" alt="Quality" />
 </p>
 
@@ -32,7 +33,7 @@ A governed multi-agent engineering environment that turns engineering tasks into
   <a href="#-documentation">Documentation</a>
 </p>
 
-> **Structure v2.2.1 (2026-11-14).** Content lives in `.hermes/`; each role is also a runnable Hermes profile in `profiles/`. Every file in this repository is written in English; delivered documents follow `output_language` in `task.md` (default PT-BR).
+> **Structure v2.3.0 (2026-11-14).** Content lives in `.hermes/`; each role is also a runnable Hermes profile in `profiles/`. Every file in this repository is written in English; delivered documents follow `output_language` in `task.md` (default PT-BR).
 
 ---
 
@@ -121,6 +122,7 @@ Each role declares its skills, references, policies, workflows and write scope i
 - **Reviewer loop:** at most 2 `REWORK` cycles, then `ESCALATE` to a human.
 - **Memory:** `decisions.md` receives approved ADRs only; `lessons.md` is written by the reviewer; `open-questions.md` accepts any agent. Memory is git-versioned Markdown — the profiles' `state.db` holds harness facts only.
 - **Enforcement split:** the runtime imposes the toolset allowlist, the per-profile skill set and merge protection. Everything else — precedence, gates, separation of duties — is policy text the agent must honour. `.hermes/config/profiles.md` §3 states which is which.
+- **Model per role:** each role runs the AI model its specialization class names in `.hermes/config/models.yaml` (a coding model for implementation roles, reasoning for design/review, text for the writer). `setup.sh` renders the catalog into each profile's `config.yaml`; the model is not chosen per task.
 
 ---
 
@@ -160,7 +162,7 @@ LADE/
 
 | Path | Purpose | Who writes |
 |------|---------|------------|
-| `.hermes/config/` | Permissions, tools/MCPs, role→profile binding | Humans |
+| `.hermes/config/` | Permissions, tools/MCPs, role→profile binding, per-role model catalog | Humans |
 | `.hermes/agents/<role>/` | `SOUL.md` (identity) and `AGENTS.md` (manifest) | Humans |
 | `.hermes/skills/` | Single skill catalog (`SKILL.md`) | Humans |
 | `.hermes/references/` | Single source of domain knowledge | Humans |
@@ -180,11 +182,22 @@ Core identity files: `.hermes/SOUL.md` and `.hermes/AGENTS.md`. They are **not**
 ```bash
 git clone https://github.com/Gabrieln18/LADE.git
 cd LADE
-./setup.sh                 # link the 9 profiles and trust the skill tree
-./setup.sh --check         # report drift without writing
+./setup.sh                 # link the 9 profiles, render their models, trust the skill tree
+./setup.sh --check         # report drift (links + model) without writing
+make models                # the model each role will run on (role -> class -> model)
 hermes profile list        # nine LADE profiles + default
 hermes -p orchestrator     # start a session as the orchestrator
 ```
+
+Pick a specialist model per role (optional, first contact):
+
+```bash
+make models-set ROLE=software-engineer MODEL=<coding-model-id>   # persists in models.yaml, renders
+./setup.sh --model reviewer=<reasoning-model-id>                 # same, via setup.sh
+make run ROLE=software-engineer MODEL=<model-id>                 # one-off run override, not persisted
+```
+
+The model each role runs on comes from `.hermes/config/models.yaml` (one source); `setup.sh` renders it into the profile's `config.yaml`. See `.hermes/config/profiles.md` §2 and ADR-0002.
 
 Then:
 
@@ -232,9 +245,10 @@ Runtime-side: each profile disables every toolset its role does not need (`confi
 | Global rules for agents | `.hermes/AGENTS.md` |
 | Identity and values | `.hermes/SOUL.md` |
 | Role → profile binding | `.hermes/config/profiles.md` |
+| Model per role (specialization classes) | `.hermes/config/models.yaml` |
 | Memory rules | `.hermes/memory/README.md` |
 | Lattinus context (snapshot) | `.hermes/references/lattinus.md` |
 | Source of context | [Notion Lattinus](https://app.notion.com/p/Lattinus-2f673eebda2f80d7973fc08ef9558a2e) |
 | Changelog | `.hermes/CHANGELOG.md` |
 
-**Version:** v2.2.1 (2026-11-14) · **Changelog:** `.hermes/CHANGELOG.md`
+**Version:** v2.3.0 (2026-11-14) · **Changelog:** `.hermes/CHANGELOG.md`
