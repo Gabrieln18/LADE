@@ -24,16 +24,18 @@ agent:
   # >>> lade:reasoning (generated from .hermes/config/models.yaml by setup.sh -- do not edit) >>>
   reasoning_effort: high
   # <<< lade:reasoning <<<
+  # Bundles/postures that CARRY wanted tools MUST NOT be listed here: the runtime subtracts
+  # agent.disabled_toolsets at TOOL granularity and LAST, so naming `debugging` (which carries
+  # read_file/write_file/patch/search_files/terminal/process_manage) or `coding` strips those
+  # tools even though `file` and `terminal` are never disabled by name. Guard: make tools-check.
   disabled_toolsets:
     - bot_room
     - browser
     - catalog
-    - coding
     - computer_use
     - connections
     - context_engine
     - cronjob
-    - debugging
     - delegation
     - desktop_ui
     - discord
@@ -87,3 +89,4 @@ skills:
   # not scanned again, so the role's surface stays exact.
   project_discovery: false
   disabled: []
+_config_version: 54
