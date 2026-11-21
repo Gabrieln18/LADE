@@ -41,3 +41,22 @@
   - Negative: `setup.sh` writes a marker-delimited region inside `config.yaml`; `set` needs `ruamel.yaml` to preserve catalog comments; a model change takes effect on the next profile session.
 - **Affected paths:** `.hermes/config/models.yaml`, `scripts/models_render.py`, `setup.sh`, `Makefile`, `profiles/*/config.yaml`, `config/profiles.md`, `README.md`, `CHANGELOG.md`.
 - **Approval evidence:** maintainer decision in the v2.3.0 session, 2026-11-14 — D1 single source + render; D2 render with markers; D3 single OpenRouter key; D4 defaults + flags/env; D5 reasoning/fallback in scope. Refined 2026-11-15: per-profile model as the primary layer with `classes` as optional presets, `overrides` dropped.
+
+### ADR-0003 · The tool surface is verified by resolving it, never by reading the config
+
+- **Date:** 2026-11-20
+- **Task:** none (defect found while planning the test battery)
+- **Status:** draft — pending human approval
+- **Decision:** The declared tool surface (`config/profiles.md` §2) is verified per role by the runtime's own resolver, wired into `make verify` and exposed as `make tools-check` (`scripts/lade_dev.py tool-surface`). And `agent.disabled_toolsets` MUST NOT list a bundle or posture whose tool set carries tools the role keeps: the runtime subtracts the list at **tool** granularity and **last** (`model_tools._select_tool_names`), so naming such an entry strips the wanted tools even though the toolset was never disabled by name.
+- **Context:** A test-battery review found every one of the nine roles running **without `file` and `terminal`**, although §2 declares `file` for all nine and `terminal` for eight. The cause was the single entry `debugging` in each `agent.disabled_toolsets`: it carries `read_file`, `write_file`, `patch`, `search_files`, `terminal`, `process_manage` (plus `web_search`/`web_extract`, already covered by `web`/`search`). Consequences were categorical, not cosmetic: the orchestrator could not write a `task.md`; the implementing roles could not run a test or a formatter; `technical-writer` could not write a document; `reviewer` lost the `terminal` §2 grants it for checks. Nothing in the repository caught it — `./setup.sh --check` exits 0 because it never resolves the tool surface, and the YAML reads as if the toolsets were granted.
+- **Alternatives rejected:**
+  - Trusting `./setup.sh --check`: it validates layout, links, model drift and skill counts, not the resolved surface (its own §3 checks skills, not tools).
+  - Reading the YAML by eye or diffing the list against §2 textually: that is exactly the reasoning that missed the bug — `file`/`terminal` never appear in the deny list.
+  - Generating the deny list in `setup.sh` from §2 (deny every toolset whose tools are not wanted): correct in spirit, but a mixed entry such as `debugging` cannot be expressed as a whole-toolset denial without stripping wanted tools, so the derivation needs the tool-level conflict logic this decision puts in the checker. Kept as the preferred follow-up recorded below.
+  - Removing only `debugging` and leaving `coding`: `coding` is a posture, so the runtime subtracts only its non-core delta (empty) and it strips nothing today — but it documents a bundle that would strip the whole surface if the runtime ever stops treating it as a posture. Removed from all nine lists.
+- **Consequences:**
+  - Positive: the drift is fixed for all nine roles and cannot recur silently — `make verify` fails on any tool missing, any tool granted beyond §2, and names the `disabled_toolsets` entry responsible.
+  - Negative: `make verify` now depends on the installed Hermes resolver API (`hermes_cli.tools_config._get_platform_tools`, `model_tools._select_tool_names`, `_disabled_entry_tools`), so an upstream rename surfaces as an error in the check rather than silently passing.
+- **Affected paths:** `profiles/*/config.yaml` (nine), `scripts/lade_dev.py`, `Makefile`, `.hermes/config/profiles.md` §2.
+- **Approval evidence:** pending — maintainer decision required (`config/` is human-write-only).
+- **Follow-up (proposed, not decided):** derive the deny list from §2 in `setup.sh` using the conflict logic the checker now implements, so the list stops being hand-maintained; and add the check to the CI gate once required checks exist (`lattinus-code.md` §14).

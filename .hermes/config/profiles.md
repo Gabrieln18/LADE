@@ -35,6 +35,7 @@ Rules:
 3. `terminal` implies shell commands under `approvals.mode`; it is granted to roles that must run local checks. `technical-writer` gets none, because documenting is a read-and-write activity.
 4. The reviewer keeps `terminal` for checks only. Its read-only constraint on the artifact under review is advisory: the `file` toolset bundles read and write, and file writes are never prompted. Making it structural requires a plugin hook (`Q-NNN`).
 5. No profile gets `web`, `browser`, `computer_use`, `image_gen`, `video`, `tts`, `cronjob`, `kanban` or a messaging gateway toolset. Network access is denied by default (`config/tools.md` §6).
+6. `agent.disabled_toolsets` MUST NOT name a bundle or posture whose tool set carries a tool the role keeps. The runtime subtracts that list at **tool** granularity and **last** (`model_tools._select_tool_names`), so an entry such as `debugging` — which carries `read_file`, `write_file`, `patch`, `search_files`, `terminal`, `process_manage` — empties `file` and `terminal` for a role §2 grants them, while the YAML still reads as if they were enabled. Deny the specific toolset (`web`, `search`), never the bundle. The resolved surface is verified by `make tools-check` / `make verify`, not by reading the list (ADR-0003).
 
 ## 3. Capability mapping
 
