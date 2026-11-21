@@ -1,0 +1,33 @@
+{
+  "spec": "build-001 idempotent parcel ingest",
+  "source": "parcels.csv",
+  "accepted": {
+    "P-001": {
+      "area_ha": 123.6435,
+      "tolerance_rel": 0.01
+    },
+    "P-002": {
+      "area_ha": 58.0953,
+      "tolerance_rel": 0.01
+    },
+    "P-007": {
+      "area_ha": 87.4215,
+      "tolerance_rel": 0.01
+    }
+  },
+  "rejected": {
+    "P-003": "degenerate ring: fewer than 3 distinct positions after the closing point",
+    "P-004": "coordinate out of range (latitude must be within [-90, 90])",
+    "P-005": "unparsable geometry",
+    "P-001": "duplicate parcel_id (second occurrence)"
+  },
+  "rejected_any_reason_ok": [
+    "P-006"
+  ],
+  "notes": [
+    "P-006 repeats P-001's geometry under a new id: either accepted (distinct parcel) or rejected as a duplicate geometry",
+    "the second P-001 row MUST NOT overwrite or duplicate the first: reject it, do not silently keep both",
+    "output must be byte-identical across two runs on the same input (RFC: idempotent, lattinus-code.md 6.2 Data pipeline)",
+    "P-003 closes on its own second position: the ring holds 2 distinct points, so it is degenerate independently of any area formula (a collinear 3-point ring is NOT degenerate under the spherical formula and must not be used as a reject case)"
+  ]
+}
