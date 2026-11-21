@@ -13,11 +13,12 @@ Run it through the Hermes venv, which is where the runtime dependencies live:
     $PY scripts/lade_dev.py verify
 
 Subcommands
-    verify      per-role health: home layout, content links, served verdict (read-only)
-    canonical   the three facts that decide attach vs. "another tenant" (read-only)
-    roster      who serves what, and every parked profile with its reason (read-only)
-    rescan      ask the host gateway to reconcile profiles/ (side effect: may serve)
-    serve NAME  explicitly serve one profile on the host gateway (side effect)
+    verify        per-role health: home layout, content links, model, tool surface, served (read-only)
+    tool-surface  resolved tool surface vs. the normative §2 table of config/profiles.md (read-only)
+    canonical     the three facts that decide attach vs. "another tenant" (read-only)
+    roster        who serves what, and every parked profile with its reason (read-only)
+    rescan        ask the host gateway to reconcile profiles/ (side effect: may serve)
+    serve NAME    explicitly serve one profile on the host gateway (side effect)
 
 Exit codes: 0 all good, 1 at least one FAIL, 2 bad usage.
 """
@@ -222,6 +223,132 @@ def check_model(role: str, report: Report) -> None:
     report.add(role, OK, "model", model or "(unset)")
 
 
+# ── tool surface (config/profiles.md §2) ───────────────────────────────────────────────────────────
+#
+# The failure this guards: `agent.disabled_toolsets` is subtracted at TOOL granularity and LAST
+# (model_tools._select_tool_names), so naming a bundle that CARRIES the wanted tools strips them even
+# though the toolset was never disabled by name. `debugging` carries read_file/write_file/patch/
+# search_files/terminal/process_manage; listing it empties `file` and `terminal` for a role that
+# declares both. Nothing else in this repository catches it: setup.sh --check never resolves the tool
+# surface, and the YAML reads as if `file` and `terminal` were granted. Only the runtime resolver does.
+
+PROFILES_DOC = Path(".hermes") / "config" / "profiles.md"
+TOOL_PLATFORM = "cli"
+
+
+def expected_toolsets_by_role() -> dict[str, list[str]]:
+    """Enabled toolset names per role, read from the normative §2 table of `config/profiles.md`.
+
+    That table is the source of truth (`config/profiles.md` §1 rule 1); setup.sh and each profile's
+    `config.yaml` must agree with it. Rows look like:
+
+        | `orchestrator` | `orchestrator` | `file`, `terminal`, `skills`, ... | yes | yes |
+    """
+    import re
+
+    table: dict[str, list[str]] = {}
+    for line in (repo_root() / PROFILES_DOC).read_text(encoding="utf-8").splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 3:
+            continue
+        role = re.fullmatch(r"`([a-z0-9_-]+)`", cells[0])
+        if not role:
+            continue
+        toolsets = re.findall(r"`([a-z0-9_-]+)`", cells[2])
+        if toolsets:
+            table[role.group(1)] = toolsets
+    return table
+
+
+def _tools_of_toolsets(names: list[str]) -> set[str]:
+    from toolsets import resolve_toolset, validate_toolset
+
+    tools: set[str] = set()
+    for name in names:
+        if validate_toolset(name):
+            tools |= set(resolve_toolset(name))
+    return tools
+
+
+def resolve_tool_surface(role: str) -> tuple[set[str], set[str]]:
+    """The runtime's own answer for one role: (enabled toolsets, resolved tool names).
+
+    Resolved exactly as the CLI resolves it: the profile home IS the HERMES_HOME, `load_config()`
+    merges what the runtime would read, `_get_platform_tools` picks the platform toolset list and
+    `model_tools._select_tool_names` applies `agent.disabled_toolsets` last, at tool granularity.
+    """
+    from hermes_cli.tools_config import _get_platform_tools, load_config
+    import model_tools
+
+    previous = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = str(hermes_home() / "profiles" / role)
+    try:
+        config = load_config()
+        enabled = _get_platform_tools(config, TOOL_PLATFORM)
+        disabled = (config.get("agent") or {}).get("disabled_toolsets")
+        tools = model_tools._select_tool_names(sorted(enabled), disabled, True)
+    finally:
+        if previous is None:
+            os.environ.pop("HERMES_HOME", None)
+        else:
+            os.environ["HERMES_HOME"] = previous
+    return set(enabled), set(tools)
+
+
+def _stripped_by(role: str) -> dict[str, list[str]]:
+    """{tool_name: [disabled entries that remove it]} for one profile (diagnostic detail)."""
+    from hermes_cli.tools_config import _disabled_entry_tools, load_config
+
+    previous = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = str(hermes_home() / "profiles" / role)
+    try:
+        entries = [str(n).strip() for n in ((load_config().get("agent") or {}).get("disabled_toolsets") or [])]
+    finally:
+        if previous is None:
+            os.environ.pop("HERMES_HOME", None)
+        else:
+            os.environ["HERMES_HOME"] = previous
+
+    by: dict[str, list[str]] = {}
+    for entry in entries:
+        try:
+            for tool in _disabled_entry_tools(entry):
+                by.setdefault(tool, []).append(entry)
+        except Exception:  # health: an unknown entry must not hide the surface result
+            continue
+    return by
+
+
+def check_tool_surface(role: str, report: Report) -> None:
+    """Does the resolved tool surface equal what `config/profiles.md` §2 declares for this role?"""
+    declared = expected_toolsets_by_role()
+    if role not in declared:
+        report.add(role, FAIL, "tool_surface_undeclared",
+                   f"role absent from {PROFILES_DOC} §2 (a role with no row MUST NOT be invoked)")
+        return
+
+    wanted_toolsets = declared[role]
+    actual_toolsets, actual = resolve_tool_surface(role)
+    expected = _tools_of_toolsets(wanted_toolsets)
+
+    missing, extra = sorted(expected - actual), sorted(actual - expected)
+    if missing:
+        by = _stripped_by(role)
+        culprit = {entry for tool in missing for entry in by.get(tool, [])}
+        hint = f" — stripped by agent.disabled_toolsets entries: {', '.join(sorted(culprit))}" if culprit else ""
+        report.add(role, FAIL, "tools_missing", f"{', '.join(missing)}{hint}")
+    if extra:
+        report.add(role, FAIL, "tools_extra", f"{', '.join(extra)} (granted, not declared in §2)")
+    if sorted(actual_toolsets) != sorted(set(wanted_toolsets) & actual_toolsets) and not missing:
+        report.add(role, WARN, "toolsets_extra",
+                   f"{', '.join(sorted(actual_toolsets - set(wanted_toolsets)))} enabled but not in §2")
+    if not missing and not extra:
+        report.add(role, OK, "tool_surface",
+                   f"{len(actual)} tool(s) = {', '.join(sorted(actual))}")
+
+
 def check_served(role: str, home: Path, report: Report, timeout: float) -> None:
     """Is the live host gateway serving this profile, per read-only discovery?"""
     from hermes_cli.gateway_runtime import discover_gateway_endpoint
@@ -270,6 +397,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
             continue
         check_content_links(role, home, report)
         check_model(role, report)
+        check_tool_surface(role, report)
         check_repo_runtime_pollution(role, report)
         check_served(role, home, report, args.timeout)
     report.render()
@@ -280,6 +408,35 @@ def cmd_verify(args: argparse.Namespace) -> int:
               f"{sum(1 for r in bad if r[1] == WARN)} warning(s)")
         return 1
     print(f"RESULT: {len(roles)} profile(s) consistent.")
+    return 0
+
+
+def cmd_tool_surface(args: argparse.Namespace) -> int:
+    """Resolved tool surface per role, against the normative §2 table. The one dimension
+    `./setup.sh --check` does not test."""
+    bootstrap_hermes()
+    roles = args.roles or discover_roles()
+    declared = expected_toolsets_by_role()
+    print(f"LADE tool surface | declared by: {PROFILES_DOC.as_posix()} §2 | platform: {TOOL_PLATFORM}")
+    bad = 0
+    for role in roles:
+        report = Report(verbose=args.verbose)
+        check_tool_surface(role, report)
+        wanted = declared.get(role, [])
+        actual_toolsets, actual = resolve_tool_surface(role)
+        level = FAIL if report.failures() else OK
+        bad += 1 if level == FAIL else 0
+        print(f"\n[{level}] {role}")
+        print(f"  declared  §2   : {', '.join(wanted) or '(absent)'}")
+        print(f"  enabled        : {', '.join(sorted(actual_toolsets))}")
+        print(f"  resolved tools : {', '.join(sorted(actual)) or '(none)'}")
+        for _, lvl, code, detail in report.failures():
+            print(f"  {lvl} {code}: {detail}")
+    print()
+    if bad:
+        print(f"RESULT: {bad} role(s) with a tool-surface drift (of {len(roles)}).")
+        return 1
+    print(f"RESULT: {len(roles)} role(s) resolve to exactly the declared surface.")
     return 0
 
 
@@ -365,6 +522,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--timeout", type=float, default=5.0, help="per-gateway-call timeout (s)")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("verify", help="per-role health and served verdict (read-only)")
+    sub.add_parser("tool-surface", help="resolved tool surface vs. config/profiles.md §2 (read-only)")
     sub.add_parser("canonical", help="the three facts behind attach vs. other-tenant (read-only)")
     sub.add_parser("roster", help="served and parked profiles (read-only)")
     sub.add_parser("rescan", help="ask the host gateway to reconcile profiles/")
@@ -372,8 +530,8 @@ def main(argv: list[str]) -> int:
     serve.add_argument("name")
     args = parser.parse_args(argv)
 
-    handlers = {"verify": cmd_verify, "canonical": cmd_canonical, "roster": cmd_roster,
-                "rescan": cmd_rescan, "serve": cmd_serve}
+    handlers = {"verify": cmd_verify, "tool-surface": cmd_tool_surface, "canonical": cmd_canonical,
+                "roster": cmd_roster, "rescan": cmd_rescan, "serve": cmd_serve}
     return handlers[args.command](args)
 
 
