@@ -25,6 +25,9 @@ __pycache__/
 *.py[cod]
 .venv/
 .DS_Store
+# Machine-run evidence: eval traces, smoke logs, harness output. Never committed;
+# the human-readable report goes to .hermes/evals/reports/ instead.
+.lade-runs/
 # Makefile: local archives and compiled helpers
 .lade-backups/
 

@@ -89,6 +89,10 @@ repair-homes-check: ## Report profile-home layout drift only (writes nothing)
 verify: ## Health of every profile + will the CLI attach? (exit 1 on any FAIL)
 	cd "$(ROOT)" && "$(VENV_PY)" "$(DEV)" --timeout "$(VERIFY_TIMEOUT)" verify
 
+.PHONY: tools-check
+tools-check: ## Resolved tool surface per role vs. config/profiles.md sec 2 (exit 1 on drift)
+	cd "$(ROOT)" && "$(VENV_PY)" "$(DEV)" tool-surface
+
 .PHONY: verify-canonical
 verify-canonical: ## The three facts that decide attach vs "another tenant's gateway"
 	cd "$(ROOT)" && "$(VENV_PY)" "$(DEV)" --timeout "$(VERIFY_TIMEOUT)" canonical
@@ -260,6 +264,70 @@ restore: ## Restore the newest backup archive over profiles/ (CONFIRM=1)
 	printf '  restoring %s\n' "$$archive"
 	tar -xzf "$$archive"
 	printf '  done. run ./setup.sh, then make verify.\n'
+
+# ────────────────────────────────────────────────────────────────────────────────
+##@ Test battery
+#
+# Two layers, and the split is deliberate:
+#   * deterministic (no model calls, no cost): setup/lint/links/models/tool-surface/verify
+#   * behavioural (real model turns, real cost): the golden tasks, the build harness, the probes
+# `make test-all` runs only the first. Nothing here judges an eval: the runner records evidence and a
+# human fills the report (scripts/eval_report.py drafts it).
+
+.PHONY: test-all
+test-all: ## Deterministic battery: structure, links, lint, models, tool surface, attach (no model calls)
+	@printf '\n=== deterministic battery ===\n'
+	@cd "$(ROOT)" && ./setup.sh --check
+	@$(MAKE) --no-print-directory lint
+	@$(MAKE) --no-print-directory links
+	@$(MAKE) --no-print-directory models-check
+	@$(MAKE) --no-print-directory tools-check
+	@$(MAKE) --no-print-directory verify
+	@printf '\nRESULT: deterministic battery clean.\n'
+
+TASK ?=
+EVAL_ARGS ?=
+WORKDIR ?=
+
+.PHONY: eval-list eval-plan eval-status
+eval-list: ## Catalog of golden tasks (id, role, category, risk, runs)
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/eval_runner.py list
+
+eval-plan: ## What a suite would run and how many turns (CATEGORY=limit|happy|... TASK=...)
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/eval_runner.py plan $(if $(CATEGORY),--category $(CATEGORY)) $(if $(TASK),--task $(TASK))
+
+eval-status: ## Last recorded eval runs, from .lade-runs/index.jsonl
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/eval_runner.py status
+
+.PHONY: eval-show eval-run eval-suite eval-report eval-checklist
+eval-show: ## The exact input one task sends to the agent: make eval-show TASK=GT-SWE-002
+	@if [ -z "$(TASK)" ]; then printf 'usage: make eval-show TASK=<GT-id>\n'; exit 2; fi
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/eval_runner.py show "$(TASK)"
+
+eval-run: ## Run one golden task and capture its trace: make eval-run TASK=GT-SWE-002 [RUNS=1]
+	@if [ -z "$(TASK)" ]; then printf 'usage: make eval-run TASK=<GT-id> [RUNS=n]\n'; exit 2; fi
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/eval_runner.py run --task "$(TASK)" $(if $(RUNS),--runs $(RUNS)) $(EVAL_ARGS)
+
+eval-suite: ## Run the golden tasks matching a filter, honoring `runs:` (CATEGORY=limit TASK=... ROLE=...)
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/eval_runner.py suite $(if $(CATEGORY),--category $(CATEGORY)) $(if $(TASK),--task $(TASK)) $(if $(ROLE),--role $(ROLE)) $(EVAL_ARGS)
+
+eval-report: ## Draft the report skeleton from the recorded traces (TARGET=suite|GT-id)
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/eval_report.py skeleton --target "$(if $(TARGET),$(TARGET),suite)"
+
+eval-checklist: ## One task's Hard checks and rubric, verbatim: make eval-checklist TASK=GT-ORCH-003
+	@if [ -z "$(TASK)" ]; then printf 'usage: make eval-checklist TASK=<GT-id>\n'; exit 2; fi
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/eval_report.py checklist "$(TASK)"
+
+.PHONY: build-check probe probe-static
+build-check: ## Objective checks on a built artifact: make build-check WORKDIR=<delivery dir>
+	@if [ -z "$(WORKDIR)" ]; then printf 'usage: make build-check WORKDIR=<dir with the delivery>\n'; exit 2; fi
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/build_eval_harness.py --workdir "$(WORKDIR)" --json
+
+probe-static: ## What each profile may delegate, and whether it is pinned (no model calls)
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/multiagent_probe.py static
+
+probe: ## Run the delegation probes and analyse the traces (SCENARIO=... or empty for all)
+	cd "$(ROOT)" && "$(VENV_PY)" scripts/multiagent_probe.py run $(if $(SCENARIO),$(SCENARIO),--all)
 
 # ────────────────────────────────────────────────────────────────────────────────
 ##@ Housekeeping
